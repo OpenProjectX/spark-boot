@@ -28,5 +28,5 @@ dependencies {
 }
 
 application {
-    mainClass.set("org.openprojectx.sparkboot.examples.KotlinDslExampleKt")
+    mainClass.set("org.openprojectx.spark.boot.examples.KotlinDslExampleKt")
 }

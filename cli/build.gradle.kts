@@ -22,5 +22,5 @@ dependencies {
 }
 
 application {
-    mainClass.set("org.openprojectx.sparkboot.cli.SparkBootCliKt")
+    mainClass.set("org.openprojectx.spark.boot.cli.SparkBootCliKt")
 }

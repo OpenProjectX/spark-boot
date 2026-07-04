@@ -21,5 +21,5 @@ dependencies {
 }
 
 application {
-    mainClass.set("org.openprojectx.sparkboot.examples.hocon.HoconExampleKt")
+    mainClass.set("org.openprojectx.spark.boot.examples.hocon.HoconExampleKt")
 }

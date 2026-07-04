@@ -84,7 +84,7 @@ The Kotlin DSL and HOCON examples are self-contained: they create temporary Parq
 Applications can depend on the CLI module and provide only a HOCON config file:
 
 ```bash
-java -cp "<app-and-dependencies>" org.openprojectx.sparkboot.cli.SparkBootCliKt paid-orders.conf
+java -cp "<app-and-dependencies>" org.openprojectx.spark.boot.cli.SparkBootCliKt paid-orders.conf
 ```
 
 The CLI parses the config, assembles the flow with Dagger-backed built-in factories, and runs it with Spark.

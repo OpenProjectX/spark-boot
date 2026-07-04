@@ -146,11 +146,11 @@ Use it when pipeline construction should benefit from Kotlin types, functions, b
 [source,kotlin]
 ----
 import org.apache.spark.sql.SaveMode
-import org.openprojectx.sparkboot.dagger.DaggerSparkBootComponent
-import org.openprojectx.sparkboot.dsl.kotlin.filterSql
-import org.openprojectx.sparkboot.dsl.kotlin.select
-import org.openprojectx.sparkboot.dsl.kotlin.sparkFlow
-import org.openprojectx.sparkboot.dsl.kotlin.writeParquet
+import org.openprojectx.spark.boot.dagger.DaggerSparkBootComponent
+import org.openprojectx.spark.boot.dsl.kotlin.filterSql
+import org.openprojectx.spark.boot.dsl.kotlin.select
+import org.openprojectx.spark.boot.dsl.kotlin.sparkFlow
+import org.openprojectx.spark.boot.dsl.kotlin.writeParquet
 
 val component = DaggerSparkBootComponent.create()
 
@@ -365,9 +365,9 @@ Assemble it with Dagger-backed factories before execution.
 ----
 import com.typesafe.config.ConfigFactory
 import java.io.File
-import org.openprojectx.sparkboot.core.FlowAssembler
-import org.openprojectx.sparkboot.dagger.DaggerSparkBootComponent
-import org.openprojectx.sparkboot.dsl.hocon.SeaTunnelStyleConfigParser
+import org.openprojectx.spark.boot.core.FlowAssembler
+import org.openprojectx.spark.boot.dagger.DaggerSparkBootComponent
+import org.openprojectx.spark.boot.dsl.hocon.SeaTunnelStyleConfigParser
 
 val component = DaggerSparkBootComponent.create()
 val config = ConfigFactory.parseFile(File("job.conf")).resolve()
@@ -381,7 +381,7 @@ The `cli` module packages that runner flow:
 
 [source,bash]
 ----
-java -cp "<app-and-dependencies>" org.openprojectx.sparkboot.cli.SparkBootCliKt paid-orders.conf
+java -cp "<app-and-dependencies>" org.openprojectx.spark.boot.cli.SparkBootCliKt paid-orders.conf
 ----
 
 The CLI expects one argument: the HOCON config file path.
