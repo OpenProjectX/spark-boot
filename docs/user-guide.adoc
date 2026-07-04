@@ -155,6 +155,117 @@ Dagger is not consulted by node id during execution.
 The node instances already exist in the `ExecutableFlow`.
 Runtime execution uses the flow's node map and edge list.
 
+=== Driver Code And Executor Code
+
+Spark Boot DSL code runs on the Spark driver.
+This includes Kotlin DSL lambdas such as:
+
+[source,kotlin]
+----
+parquetSource("orders") {
+    path = "data/orders"
+}
+----
+
+That lambda configures a node instance while the flow is being assembled.
+It is not sent to Spark executors.
+The same is true for built-in nodes such as `SqlFilterNode`, `SelectNode`,
+`ParquetSourceNode`, `JdbcSourceNode`, `ParquetSinkNode`, and `IcebergSinkNode`:
+they run driver-side code that builds Spark DataFrame, SQL, read, or write plans.
+Spark then distributes Spark's own physical execution plan to executors.
+
+This is why normal Spark Boot DSL usage does not usually hit Kotlin lambda
+serialization problems.
+It is not because Spark has special Kotlin serialization support.
+Kotlin compiles to JVM bytecode, and Spark's normal closure serialization rules
+still apply whenever user code enters executor-side Spark APIs.
+
+Executor-side code starts when a user-provided node calls APIs such as:
+
+* `Dataset.map`
+* `Dataset.foreach`
+* `Dataset.foreachPartition`
+* `Dataset.rdd().map`
+* `Dataset.javaRDD().map`
+* `spark.udf().register` with a JVM lambda or function object
+
+Avoid capturing application services, Dagger components, Spark sessions,
+database clients, loggers with non-serializable state, or other driver-only
+objects in those closures.
+
+Unsafe example:
+
+[source,kotlin]
+----
+class Formatter(private val prefix: String) {
+    fun format(id: String): String = "$prefix$id"
+}
+
+class UnsafeSink(
+    private val formatter: Formatter
+) : SparkSinkNode<Dataset<Row>> {
+    override val name: String = "unsafe-sink"
+
+    override fun execute(input: Dataset<Row>, context: SparkExecutionContext) {
+        input.javaRDD()
+            .map { row -> formatter.format(row.getAs<String>("id")) }
+            .count()
+    }
+}
+----
+
+`formatter` must be serialized with the Spark task closure.
+If it is not serializable, or if it references a larger non-serializable object
+graph, the job can fail with `Task not serializable` or
+`NotSerializableException`.
+
+Preferred patterns:
+
+* Use built-in Spark SQL/DataFrame expressions: `filterSql`, `select`, and `sqlTransform`.
+* Keep node lambdas as configuration only.
+* If executor logic is unavoidable, capture only small serializable values.
+* Put reusable executor functions in top-level classes or `object` methods.
+* Broadcast large read-only data explicitly with `spark.sparkContext.broadcast`.
+* Test executor closures with `local-cluster[...]` or a real cluster, not only `local[*]`.
+
+Safe executor-side shape:
+
+[source,kotlin]
+----
+class SafeSink(
+    private val prefix: String
+) : SparkSinkNode<Dataset<Row>> {
+    override val name: String = "safe-sink"
+
+    override fun execute(input: Dataset<Row>, context: SparkExecutionContext) {
+        val serializablePrefix = prefix
+        input.javaRDD()
+            .map { row -> "$serializablePrefix${row.getAs<String>("id")}" }
+            .count()
+    }
+}
+----
+
+`local[*]` runs executors in the same JVM process and can hide classpath and
+deployment problems.
+Spark's `local-cluster[...]` mode starts standalone worker and executor JVMs,
+so it is closer to cluster behavior.
+Spark Boot includes an opt-in local-cluster integration test for this:
+
+[source,bash]
+----
+SPARK_HOME=/path/to/spark-4.0.1-bin-hadoop3 \
+  ./gradlew :integration-tests:test \
+  --tests org.openprojectx.spark.boot.integration.SparkBootLocalClusterIntegrationTest \
+  --no-configuration-cache
+----
+
+The test is skipped when `SPARK_HOME`, `spark.home`, or `spark.test.home` is not
+set to a Spark distribution.
+Maven-resolved Spark jars alone are not enough for `local-cluster[...]` because
+Spark's standalone launcher expects a distribution layout with a `jars`
+directory.
+
 == Requirements
 
 Spark Boot currently targets:

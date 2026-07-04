@@ -69,6 +69,10 @@ The configuration lambda customizes a newly-created node instance before executi
 Dagger supplies node factories and runtime services, while `SparkRuntime` executes the completed flow later.
 Applications can contribute their own node factories through Dagger multibindings and create them in the DSL with `node<MyNode>("orders", "MyNodeKind") { ... }`.
 In that shape, `"MyNodeKind"` selects the Dagger-registered factory and `"orders"` remains the flow-local node id.
+DSL lambdas and built-in nodes run on the Spark driver and build Spark plans; they are not sent to executors.
+User-provided nodes can still enter executor-side Spark APIs such as `Dataset.map`, RDD `map`, `foreachPartition`, or UDF lambdas.
+Those closures must follow normal Spark serialization and executor classpath rules.
+See [docs/user-guide.adoc](docs/user-guide.adoc) for local-cluster testing guidance and examples of unsafe captures.
 
 Spark Boot also supports starter-style environment configuration for shared
 infrastructure such as JDBC connections, S3, HMS, and Iceberg catalogs:

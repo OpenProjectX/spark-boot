@@ -20,3 +20,14 @@ dependencies {
     testImplementation("org.apache.spark:spark-sql_2.13")
     testRuntimeOnly(libs.junitPlatformLauncher)
 }
+
+tasks.withType<Test>().configureEach {
+    minHeapSize = "1024m"
+    maxHeapSize = "4096m"
+    jvmArgs(
+        "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.nio=ALL-UNNAMED",
+        "--add-opens=java.base/java.net=ALL-UNNAMED",
+    )
+}
