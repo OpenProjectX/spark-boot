@@ -98,9 +98,6 @@ fun assertIcebergRows(spark: SparkSession, table: String) {
 
 fun configureSparkBootConnections(jdbcUrl: String) {
     System.setProperty("spark.boot.jdbc.connections.orders.url", jdbcUrl)
-    System.setProperty("spark.boot.jdbc.connections.orders.user", DB_USER)
-    System.setProperty("spark.boot.jdbc.connections.orders.password", DB_PASSWORD)
-    System.setProperty("spark.boot.jdbc.connections.orders.driver", "com.mysql.cj.jdbc.Driver")
 
     System.getProperty("hive.metastore.uris")?.let { metastoreUris ->
         System.setProperty("spark.boot.hms.uri", metastoreUris)
@@ -108,7 +105,6 @@ fun configureSparkBootConnections(jdbcUrl: String) {
     System.getProperty("spark.boot.iceberg.warehouse")?.let { warehouse ->
         System.setProperty("spark.boot.hms.warehouse", warehouse)
     }
-    System.setProperty("spark.boot.hms.catalog", "hms")
 }
 
 fun SparkBootComponent.runConfig(configText: String) {

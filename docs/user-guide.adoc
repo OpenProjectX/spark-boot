@@ -433,6 +433,9 @@ Kotlin DSL.
 Spark Boot reads `spark.boot` settings from Typesafe Config, so classpath
 `application.conf`, system properties, and environment-backed config sources can
 contribute values before the Dagger component creates the Spark session.
+Partial config is supported: stable values can live in
+`src/main/resources/application.conf`, and deployment-specific or test-specific
+values can be supplied through system properties.
 
 [source,hocon]
 ----
@@ -461,13 +464,41 @@ spark.boot {
 }
 ----
 
+For example, an application can keep this in
+`src/main/resources/application.conf`:
+
+[source,hocon]
+----
+spark.boot {
+  hms {
+    catalog = "hms"
+  }
+
+  jdbc.connections.orders {
+    user = "spark"
+    password = "spark"
+    driver = "com.mysql.cj.jdbc.Driver"
+  }
+}
+----
+
+Then a launcher or test can provide only the dynamic pieces before creating the
+Dagger component:
+
+[source,kotlin]
+----
+System.setProperty("spark.boot.jdbc.connections.orders.url", jdbcUrl)
+System.setProperty("spark.boot.hms.uri", metastoreUri)
+System.setProperty("spark.boot.hms.warehouse", warehouse)
+----
+
 The contract is:
 
 . `spark.boot.s3` configures Hadoop `s3a` before `SparkSession.getOrCreate()`.
 . `spark.boot.hms` enables Hive support and registers the named Iceberg catalog.
 . `spark.boot.jdbc.connections.<name>` creates a named JDBC connection.
 . A node may still provide explicit `url`, `user`, `password`, or `driver`; explicit node values override the named connection values.
-. Dynamic tests may set the same paths as system properties before creating the Dagger component, for example `spark.boot.jdbc.connections.orders.url`.
+. Dynamic tests may set only the missing paths as system properties before creating the Dagger component, for example `spark.boot.jdbc.connections.orders.url`.
 
 Kotlin DSL:
 

@@ -50,9 +50,11 @@ The `:jdbc-iceberg-hms` module is both a runnable app and a JUnit-backed
 integration example. It starts LocalStack S3 and Hive Metastore through
 `org.openprojectx.bigdata-test`; the app itself depends on Testcontainers and
 starts `ghcr.io/openprojectx/dockerhub/library/mariadb:10.6.27-jammy` as the
-JDBC source. It publishes the dynamic container endpoints into Spark Boot
-starter-style config, then runs equivalent HOCON and Kotlin DSL flows from
-`connection = "orders"` into `catalog = "hms"` HMS-backed Iceberg tables.
+JDBC source. Stable Spark Boot config lives in
+`src/main/resources/application.conf`; the app publishes only dynamic container
+endpoints as system properties. It then runs equivalent HOCON and Kotlin DSL
+flows from `connection = "orders"` into `catalog = "hms"` HMS-backed Iceberg
+tables.
 
 Run the app:
 

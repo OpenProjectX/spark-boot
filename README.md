@@ -90,6 +90,11 @@ spark.boot {
 }
 ```
 
+This config can be partial. Stable values can live in
+`src/main/resources/application.conf`, while dynamic values such as Testcontainers
+ports can be supplied through system properties before the Dagger component is
+created.
+
 Then flows can reference logical names instead of repeating connection details:
 
 ```kotlin
@@ -119,7 +124,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run -
 ```
 
 The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The Kotlin DSL examples create temporary Parquet input in code. The `:spark-boot-app` example shows the `@SparkBoot` application entry point and a user-provided Dagger node factory used from the DSL. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`. The `:jdbc-iceberg-hms` app starts LocalStack S3, Hive Metastore, and a MariaDB Testcontainers source, then writes JDBC data into HMS-backed Iceberg tables through named `orders` JDBC and `hms` catalog config.
+The Kotlin DSL examples create temporary Parquet input in code. The `:spark-boot-app` example shows the `@SparkBoot` application entry point and a user-provided Dagger node factory used from the DSL. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`. The `:jdbc-iceberg-hms` app starts LocalStack S3, Hive Metastore, and a MariaDB Testcontainers source, then writes JDBC data into HMS-backed Iceberg tables through named `orders` JDBC and `hms` catalog config; stable config is loaded from classpath `application.conf` and dynamic endpoints are supplied at runtime.
 
 ## CLI
 
