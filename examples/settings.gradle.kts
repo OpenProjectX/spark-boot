@@ -37,5 +37,6 @@ dependencyResolutionManagement {
 rootProject.name = "spark-boot-examples"
 
 include("kotlin-dsl")
+include("spark-boot-app")
 include("hocon")
 include("jdbc-iceberg-hms")

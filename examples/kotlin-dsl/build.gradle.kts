@@ -10,7 +10,7 @@ kotlin {
 
 sparkPlatform {
     line.set("spark4")
-    managedConfigurations.set(listOf("implementation", "testImplementation"))
+    managedConfigurations.set(listOf("implementation"))
 }
 
 dependencies {

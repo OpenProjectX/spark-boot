@@ -1,4 +1,4 @@
-package org.openprojectx.spark.boot.examples
+package org.openprojectx.spark.boot.examples.app
 
 import java.nio.file.Files
 import org.apache.spark.sql.SaveMode
@@ -11,8 +11,8 @@ import org.openprojectx.spark.boot.dsl.kotlin.writeParquet
 
 @SparkBoot
 fun main(args: Array<String>) = runSparkBoot(args) {
-    val input = Files.createTempDirectory("spark-boot-example-input")
-    val output = Files.createTempDirectory("spark-boot-example-output")
+    val input = Files.createTempDirectory("spark-boot-app-input")
+    val output = Files.createTempDirectory("spark-boot-app-output")
     Files.delete(output)
 
     spark.createDataFrame(
@@ -29,7 +29,7 @@ fun main(args: Array<String>) = runSparkBoot(args) {
 fun SparkBootContext.paidOrdersFlow(
     input: String,
     output: String
-) = flow("paid-orders") {
+) = flow("paid-orders-app") {
     parquetSource("orders") {
         path = input
     }

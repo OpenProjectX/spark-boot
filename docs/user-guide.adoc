@@ -146,31 +146,53 @@ Use it when pipeline construction should benefit from Kotlin types, functions, b
 [source,kotlin]
 ----
 import org.apache.spark.sql.SaveMode
-import org.openprojectx.spark.boot.dagger.DaggerSparkBootComponent
+import org.openprojectx.spark.boot.dsl.kotlin.SparkBoot
 import org.openprojectx.spark.boot.dsl.kotlin.filterSql
+import org.openprojectx.spark.boot.dsl.kotlin.runSparkBoot
 import org.openprojectx.spark.boot.dsl.kotlin.select
-import org.openprojectx.spark.boot.dsl.kotlin.sparkFlow
 import org.openprojectx.spark.boot.dsl.kotlin.writeParquet
 
-val component = DaggerSparkBootComponent.create()
-
-val flow = sparkFlow("paid-orders", component) {
-    parquetSource("orders") {
-        path = "data/orders"
+@SparkBoot
+fun main(args: Array<String>) = runSparkBoot(args) {
+    flow("paid-orders") {
+        parquetSource("orders") {
+            path = "data/orders"
+        }
+            .filterSql("paid-only") {
+                condition = "status = 'PAID'"
+            }
+            .select("select-columns") {
+                columns = listOf("id", "amount", "status")
+            }
+            .writeParquet("sink") {
+                path = "output/paid-orders"
+                mode = SaveMode.Overwrite
+            }
     }
-        .filterSql("paid-only") {
-            condition = "status = 'PAID'"
-        }
-        .select("select-columns") {
-            columns = listOf("id", "amount", "status")
-        }
-        .writeParquet("sink") {
-            path = "output/paid-orders"
-            mode = SaveMode.Overwrite
-        }
+}
+----
+
+`runSparkBoot` creates the Dagger-backed Spark Boot component, executes the returned flow,
+and stops the Spark session in a `finally` block.
+The annotation marks the application entry point for discovery and future tooling.
+
+The DSL can live in the current main file or in a separate Kotlin file:
+
+[source,kotlin]
+----
+fun SparkBootContext.ordersFlow(input: String, output: String) = flow("paid-orders") {
+    parquetSource("orders") {
+        path = input
+    }.writeParquet("sink") {
+        path = output
+        mode = SaveMode.Overwrite
+    }
 }
 
-component.sparkRuntime().run(flow)
+@SparkBoot
+fun main(args: Array<String>) = runSparkBoot(args) {
+    ordersFlow("data/orders", "output/paid-orders")
+}
 ----
 
 === Explicit Edges
@@ -615,13 +637,16 @@ Run the standalone examples build:
 
 [source,bash]
 ----
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples runAll --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 ----
 
 The `examples` directory is an independent multi-module Gradle build.
 It is excluded from the root project and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The Kotlin DSL example creates temporary Parquet input in code.
+The Kotlin DSL examples create temporary Parquet input in code.
+The `:spark-boot-app` module demonstrates the `@SparkBoot` application entry point as a runnable application.
 The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`.
 
 == Current Limitations

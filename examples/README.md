@@ -21,12 +21,21 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew publishToMavenLocal --no-configurat
 From the repository root:
 
 ```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples runAll --no-configuration-cache
+```
+
+Run individual app examples:
+
+```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 ```
 
 The `:kotlin-dsl` example is self-contained. It creates temporary Parquet input,
 runs the flow, prints the paid orders, and stops Spark.
+The `:spark-boot-app` example shows the Spring Boot-style entry point with
+`@SparkBoot` and `runSparkBoot`; it is an application example, not a JUnit test.
 The `:hocon` example is config-only. The `org.openprojectx.bigdata-test`
 Gradle plugin starts LocalStack S3 and prepares the input Parquet data from
 TOML config, then Gradle runs the Spark Boot CLI with `paid-orders.conf`.

@@ -42,25 +42,24 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew test --no-configuration-cache
 Create and run a Kotlin DSL flow:
 
 ```kotlin
-val component = DaggerSparkBootComponent.create()
-
-val flow = sparkFlow("paid-orders", component) {
-    parquetSource("orders") {
-        path = "data/orders"
+@SparkBoot
+fun main(args: Array<String>) = runSparkBoot(args) {
+    flow("paid-orders") {
+        parquetSource("orders") {
+            path = "data/orders"
+        }
+            .filterSql("paid-only") {
+                condition = "status = 'PAID'"
+            }
+            .select("select-columns") {
+                columns = listOf("id", "amount", "status")
+            }
+            .writeParquet("sink") {
+                path = "output/paid-orders"
+                mode = SaveMode.Overwrite
+            }
     }
-        .filterSql("paid-only") {
-            condition = "status = 'PAID'"
-        }
-        .select("select-columns") {
-            columns = listOf("id", "amount", "status")
-        }
-        .writeParquet("sink") {
-            path = "output/paid-orders"
-            mode = SaveMode.Overwrite
-        }
 }
-
-component.sparkRuntime().run(flow)
 ```
 
 Publish the root project to Maven local before running examples:
@@ -72,12 +71,14 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew publishToMavenLocal --no-configurat
 Run the standalone examples build:
 
 ```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples runAll --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 ```
 
 The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The Kotlin DSL example creates temporary Parquet input in code. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`.
+The Kotlin DSL examples create temporary Parquet input in code. The `:spark-boot-app` example shows the `@SparkBoot` application entry point. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`.
 
 ## CLI
 
