@@ -1,0 +1,613 @@
+= Spark Boot User Guide
+:toc: left
+:toclevels: 3
+:sectanchors:
+
+Spark Boot is a JVM/Kotlin framework for Spark pipeline definition and execution.
+It is built around four deliberately separate responsibilities:
+
+[source,text]
+----
+Dagger = construction
+Kotlin DSL = composition
+HOCON DSL = declarative job description
+Spark Runtime = execution
+----
+
+The central execution path is:
+
+[source,text]
+----
+Kotlin DSL or HOCON DSL
+  -> FlowDefinition / ExecutableFlow
+  -> Flow / Node / Edge model
+  -> Dagger-backed node factories
+  -> SparkRuntime
+  -> Spark execution
+----
+
+Spark Boot HOCON DSL targets SeaTunnel-style configuration shape compatibility.
+It does not claim full Apache SeaTunnel engine, runtime, or connector compatibility.
+
+== Requirements
+
+Spark Boot currently targets:
+
+* Java 17
+* Kotlin 2.2.x
+* Spark 4
+* Scala 2.13 Spark artifacts
+* Gradle Kotlin DSL
+* Dagger 2
+* Typesafe Config
+
+Spark dependencies are managed with the Spark Platform Gradle plugin:
+
+[source,kotlin]
+----
+id("org.openprojectx.spark.platform") version "0.1.41"
+----
+
+Spark-facing modules set:
+
+[source,kotlin]
+----
+sparkPlatform {
+    line.set("spark4")
+}
+----
+
+== Module Responsibilities
+
+=== core
+
+The `core` module contains only portable Spark Boot model types.
+It does not depend on Spark, Dagger, or HOCON.
+
+Important types:
+
+* `FlowDefinition`
+* `NodeDefinition`
+* `EdgeDefinition`
+* `ExecutableFlow`
+* `FlowNode`
+* `NodeFactory`
+* `ConfigNodeFactory`
+* `NodeFactoryRegistry`
+* `FlowAssembler`
+
+Use `FlowDefinition` for declarative descriptions, such as HOCON.
+Use `ExecutableFlow` when actual runtime node instances have already been created.
+
+=== runtime-spark
+
+The `runtime-spark` module contains Spark-specific execution contracts:
+
+* `SparkExecutionContext`
+* `SparkNode`
+* `SparkSourceNode`
+* `SparkTransformNode`
+* `SparkSinkNode`
+* `SparkRuntime`
+
+`SparkRuntime` validates and executes a DAG.
+The first implementation supports one input per transform or sink.
+Nodes with multiple incoming edges fail with a clear error.
+
+=== connectors
+
+The `connectors` module provides built-in nodes:
+
+* `ParquetSourceNode`
+* `ParquetSinkNode`
+* `SqlFilterNode`
+* `SelectNode`
+* `SqlTransformNode`
+* `JdbcSinkNode`
+
+It also provides Dagger-friendly programmatic factories and HOCON config factories for those nodes.
+
+=== dagger
+
+The `dagger` module wires Spark Boot construction:
+
+* `SparkBootComponent`
+* `SparkModule`
+* `RuntimeModule`
+* `BuiltinConnectorModule`
+
+Dagger constructs Spark sessions, runtime services, and factory registries.
+Dagger does not define the pipeline DAG.
+
+=== dsl-kotlin
+
+The `dsl-kotlin` module provides the primary developer API.
+It composes `ExecutableFlow` instances in Kotlin.
+
+=== dsl-hocon
+
+The `dsl-hocon` module parses SeaTunnel-style HOCON into `FlowDefinition`.
+It does not execute jobs directly.
+Execution still goes through `FlowAssembler` and `SparkRuntime`.
+
+== Kotlin DSL
+
+The Kotlin DSL is the native programmatic API for developers.
+Use it when pipeline construction should benefit from Kotlin types, functions, branching, and normal application code.
+
+=== Basic Pipeline
+
+[source,kotlin]
+----
+import org.apache.spark.sql.SaveMode
+import org.openprojectx.sparkboot.dagger.DaggerSparkBootComponent
+import org.openprojectx.sparkboot.dsl.kotlin.filterSql
+import org.openprojectx.sparkboot.dsl.kotlin.select
+import org.openprojectx.sparkboot.dsl.kotlin.sparkFlow
+import org.openprojectx.sparkboot.dsl.kotlin.writeParquet
+
+val component = DaggerSparkBootComponent.create()
+
+val flow = sparkFlow("paid-orders", component) {
+    parquetSource("orders") {
+        path = "data/orders"
+    }
+        .filterSql("paid-only") {
+            condition = "status = 'PAID'"
+        }
+        .select("select-columns") {
+            columns = listOf("id", "amount", "status")
+        }
+        .writeParquet("sink") {
+            path = "output/paid-orders"
+            mode = SaveMode.Overwrite
+        }
+}
+
+component.sparkRuntime().run(flow)
+----
+
+=== Explicit Edges
+
+For branching or non-linear flows, assign node references and connect them explicitly.
+
+[source,kotlin]
+----
+val flow = sparkFlow("orders", component) {
+    val orders = parquetSource("orders") {
+        path = "data/orders"
+    }
+
+    val paid = orders.filterSql("paid") {
+        condition = "status = 'PAID'"
+    }
+
+    val cancelled = orders.filterSql("cancelled") {
+        condition = "status = 'CANCELLED'"
+    }
+
+    paid.writeParquet("paid-sink") {
+        path = "output/paid"
+        mode = SaveMode.Overwrite
+    }
+
+    cancelled.writeParquet("cancelled-sink") {
+        path = "output/cancelled"
+        mode = SaveMode.Overwrite
+    }
+}
+----
+
+This creates two branches from the `orders` source.
+The current runtime supports fan-out.
+It does not support multi-input joins yet.
+
+=== Spark-Native Escape Hatch
+
+Spark classes are intentionally absent from the core model.
+They are exposed only through explicit Spark-native DSL APIs.
+
+[source,kotlin]
+----
+val flow = sparkFlow("advanced-orders", component) {
+    parquetSource("orders") {
+        path = "data/orders"
+    }
+        .transformDataFrame("add-derived-amount") { df ->
+            df.withColumn(
+                "amount2",
+                org.apache.spark.sql.functions.col("amount").multiply(2)
+            )
+        }
+        .writeParquet("sink") {
+            path = "output/orders2"
+            mode = SaveMode.Overwrite
+        }
+}
+----
+
+Use explicit names such as `transformDataFrame` because the code runs under Spark execution semantics.
+
+== HOCON DSL
+
+The HOCON DSL is a SeaTunnel-style declarative API for runtime and deployment configuration.
+It should be used for portable jobs that do not need arbitrary Kotlin or JVM code.
+
+Supported top-level blocks:
+
+* `env`
+* `source`
+* `transform`
+* `sink`
+
+=== Canonical Array Style
+
+[source,hocon]
+----
+env {
+  job.name = "paid-orders"
+  job.mode = "BATCH"
+  parallelism = 4
+}
+
+source = [
+  {
+    plugin_name = "Parquet"
+    path = "data/orders"
+    plugin_output = "orders"
+  }
+]
+
+transform = [
+  {
+    plugin_name = "Sql"
+    plugin_input = "orders"
+    plugin_output = "paid_orders"
+    query = "select id, amount, status from orders where status = 'PAID'"
+  }
+]
+
+sink = [
+  {
+    plugin_name = "Parquet"
+    plugin_input = "paid_orders"
+    path = "output/paid-orders"
+    save_mode = "overwrite"
+  }
+]
+----
+
+=== Object Style
+
+[source,hocon]
+----
+env {
+  job.name = "paid-orders"
+  job.mode = "BATCH"
+}
+
+source {
+  Parquet {
+    path = "data/orders"
+    plugin_output = "orders"
+  }
+}
+
+transform {
+  Sql {
+    plugin_input = "orders"
+    plugin_output = "paid_orders"
+    query = "select id, amount, status from orders where status = 'PAID'"
+  }
+}
+
+sink {
+  Parquet {
+    plugin_input = "paid_orders"
+    path = "output/paid-orders"
+    save_mode = "overwrite"
+  }
+}
+----
+
+=== Compatibility Aliases
+
+The parser accepts these output aliases:
+
+* `source_table_name` maps to `plugin_output` for sources
+* `result_table_name` maps to `plugin_output` for transforms
+
+Prefer `plugin_output` for new configuration.
+
+=== Mapping Rules
+
+Source item:
+
+[source,text]
+----
+node id = plugin_output
+node type = <plugin_name>Source
+node config = item config
+----
+
+Transform item:
+
+[source,text]
+----
+node id = plugin_output
+node type = <plugin_name>Transform
+edge = plugin_input -> plugin_output
+node config = item config
+----
+
+Sink item:
+
+[source,text]
+----
+node id = sink_<plugin_input>_<index>
+node type = <plugin_name>Sink
+edge = plugin_input -> sink node id
+node config = item config
+----
+
+=== Running HOCON
+
+The parser returns a `FlowDefinition`.
+Assemble it with Dagger-backed factories before execution.
+
+[source,kotlin]
+----
+import com.typesafe.config.ConfigFactory
+import java.io.File
+import org.openprojectx.sparkboot.core.FlowAssembler
+import org.openprojectx.sparkboot.dagger.DaggerSparkBootComponent
+import org.openprojectx.sparkboot.dsl.hocon.SeaTunnelStyleConfigParser
+
+val component = DaggerSparkBootComponent.create()
+val config = ConfigFactory.parseFile(File("job.conf")).resolve()
+val definition = SeaTunnelStyleConfigParser().parse(config)
+val executableFlow = FlowAssembler(component.nodeFactoryRegistry()).assemble(definition)
+
+component.sparkRuntime().run(executableFlow)
+----
+
+== Built-In Nodes
+
+=== ParquetSource
+
+HOCON type: `ParquetSource`
+
+Required config:
+
+* `path`
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+parquetSource("orders") {
+    path = "data/orders"
+}
+----
+
+=== ParquetSink
+
+HOCON type: `ParquetSink`
+
+Required config:
+
+* `path`
+
+Optional config:
+
+* `save_mode` or `mode`
+
+Supported save modes:
+
+* `overwrite`
+* `append`
+* `ignore`
+* `error`
+* `errorifexists`
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+writeParquet("sink") {
+    path = "output/paid-orders"
+    mode = SaveMode.Overwrite
+}
+----
+
+=== SqlFilterTransform
+
+HOCON type: `SqlFilterTransform`
+
+Required config:
+
+* `condition`
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+filterSql("paid-only") {
+    condition = "status = 'PAID'"
+}
+----
+
+=== SelectTransform
+
+HOCON type: `SelectTransform`
+
+Required config:
+
+* `columns`
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+select("select-columns") {
+    columns = listOf("id", "amount", "status")
+}
+----
+
+=== SqlTransform
+
+HOCON type: `SqlTransform`
+
+Required config:
+
+* `plugin_input`
+* `plugin_output`
+* `query`
+
+The input dataset is registered as a temporary view named by `plugin_input`.
+The SQL result is registered as a temporary view named by `plugin_output`.
+
+=== JdbcSink
+
+HOCON type: `JdbcSink`
+
+Required config:
+
+* `url`
+* `table`
+* `user`
+* `password`
+
+Optional config:
+
+* `save_mode` or `mode`
+
+== Runtime Validation
+
+`SparkRuntime` validates the executable DAG before running it.
+
+Validation checks:
+
+* the flow has at least one node
+* all edge endpoints exist
+* the graph has at least one source and one sink
+* the graph has no cycles
+* each node has at most one input
+* topological ordering is possible
+
+Input handling:
+
+* source nodes receive `Unit`
+* transform nodes receive the upstream node output
+* sink nodes receive the upstream node output
+* multi-input nodes fail in this version
+
+== Extending Spark Boot
+
+=== Add a Programmatic Node
+
+Create a node that implements one of the Spark node interfaces:
+
+[source,kotlin]
+----
+class MyTransformNode : SparkTransformNode<Dataset<Row>, Dataset<Row>> {
+    override val name: String = "my-transform"
+
+    override fun execute(
+        input: Dataset<Row>,
+        context: SparkExecutionContext
+    ): Dataset<Row> {
+        return input
+    }
+}
+----
+
+Add a programmatic factory:
+
+[source,kotlin]
+----
+class MyTransformNodeFactory @Inject constructor() : NodeFactory<MyTransformNode> {
+    override fun create(): MyTransformNode = MyTransformNode()
+}
+----
+
+Expose it from a DSL builder or through a project-specific extension function.
+
+=== Add a HOCON Node
+
+Create a config factory:
+
+[source,kotlin]
+----
+class MyTransformConfigFactory @Inject constructor() : ConfigNodeFactory {
+    override fun create(config: Map<String, Any?>): FlowNode<*, *> {
+        return MyTransformNode()
+    }
+}
+----
+
+Bind it into the Dagger map:
+
+[source,kotlin]
+----
+@Binds
+@IntoMap
+@StringKey("MyTransform")
+fun bindMyTransformFactory(
+    factory: MyTransformConfigFactory
+): ConfigNodeFactory
+----
+
+Then HOCON can refer to:
+
+[source,hocon]
+----
+transform = [
+  {
+    plugin_name = "My"
+    plugin_input = "orders"
+    plugin_output = "orders2"
+  }
+]
+----
+
+The parser maps that to type `MyTransform`.
+
+== Build And Test
+
+Run the full test suite:
+
+[source,bash]
+----
+env GRADLE_USER_HOME=/data/.gradle ./gradlew test --no-configuration-cache
+----
+
+Run only integration tests:
+
+[source,bash]
+----
+env GRADLE_USER_HOME=/data/.gradle ./gradlew :integration-tests:test --no-configuration-cache
+----
+
+Run the example application:
+
+[source,bash]
+----
+env GRADLE_USER_HOME=/data/.gradle ./gradlew :examples:run --no-configuration-cache
+----
+
+The default example expects Parquet data under `data/orders`.
+
+== Current Limitations
+
+Version 1 intentionally does not implement:
+
+* full Apache SeaTunnel runtime compatibility
+* dynamic runtime plugin loading
+* distributed scheduling
+* cluster submission management
+* streaming checkpoint lifecycle management
+* arbitrary scripting inside HOCON
+* multi-input joins
+* automatic schema inference framework
+* visual DAG editing
