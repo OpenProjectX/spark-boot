@@ -29,6 +29,132 @@ Kotlin DSL or HOCON DSL
 Spark Boot HOCON DSL targets SeaTunnel-style configuration shape compatibility.
 It does not claim full Apache SeaTunnel engine, runtime, or connector compatibility.
 
+== General Concepts
+
+Spark Boot separates object construction from pipeline composition.
+This is the most important rule to understand before using the Kotlin DSL.
+
+[cols="1,3", options="header"]
+|===
+| Concept | Meaning
+
+| Dagger component
+| Owns framework construction: `SparkSession`, `SparkRuntime`, built-in node factories, and factory registries.
+
+| Node factory
+| Creates node instances. The Kotlin DSL asks Dagger for these factories, then calls `create()`.
+
+| Flow
+| A named directed acyclic graph of node instances and edges.
+
+| Node id
+| The id of a node inside one flow. It is not a Dagger bean name.
+
+| Node config
+| Mutable properties assigned on a node instance before the flow runs.
+
+| `NodeRef<T>`
+| A DSL handle for a registered node. Use it to chain or explicitly connect edges.
+
+| Runtime
+| Validates the assembled DAG and executes nodes in topological order.
+|===
+
+=== Kotlin DSL Semantics
+
+A Kotlin DSL source call has this shape:
+
+[source,kotlin]
+----
+val orders = parquetSource("orders") {
+    path = "data/orders"
+}
+----
+
+The semantic contract is:
+
+. `parquetSource` asks the current `SparkBootComponent` for a `ParquetSourceNodeFactory`.
+. The factory creates a new `ParquetSourceNode` instance.
+. The lambda is applied to that node instance.
+. The node is registered in the current flow with id `orders`.
+. A `NodeRef<ParquetSourceNode>` is returned.
+
+Equivalent pseudo-code:
+
+[source,kotlin]
+----
+val node = component.parquetSourceNodeFactory().create()
+node.path = "data/orders"
+val orders = builder.register("orders", node)
+----
+
+The string `"orders"` is a flow node id.
+It is used for DAG registration, edge wiring, validation, and runtime lookup.
+It is not a Dagger key, Dagger bean name, Spark table name, or output path.
+
+The lambda is configuration only.
+It should set node properties such as paths, SQL conditions, save modes, table names, JDBC options, and similar node settings.
+It should not start Spark jobs, create new Spark sessions, or perform external side effects.
+Spark work happens later when `SparkRuntime.run(flow)` executes the assembled graph.
+
+Chained DSL calls add edges:
+
+[source,kotlin]
+----
+parquetSource("orders") {
+    path = "data/orders"
+}
+    .filterSql("paid-only") {
+        condition = "status = 'PAID'"
+    }
+    .writeParquet("sink") {
+        path = "output/paid-orders"
+    }
+----
+
+This creates three nodes and two edges:
+
+[source,text]
+----
+orders -> paid-only -> sink
+----
+
+Explicit references are useful when the graph is not a simple chain:
+
+[source,kotlin]
+----
+val orders = parquetSource("orders") {
+    path = "data/orders"
+}
+
+val paid = orders.filterSql("paid") {
+    condition = "status = 'PAID'"
+}
+
+orders.filterSql("cancelled") {
+    condition = "status = 'CANCELLED'"
+}
+----
+
+Node ids must be unique inside a single flow.
+The same id can be reused in another flow because ids are flow-local.
+
+=== Execution Contract
+
+At runtime, Spark Boot:
+
+. validates that the flow contains nodes;
+. validates that edges reference known node ids;
+. validates the graph is acyclic;
+. validates each node has at most one input in the current version;
+. executes nodes in topological order;
+. passes source nodes `Unit`;
+. passes transform and sink nodes the upstream node output.
+
+Dagger is not consulted by node id during execution.
+The node instances already exist in the `ExecutableFlow`.
+Runtime execution uses the flow's node map and edge list.
+
 == Requirements
 
 Spark Boot currently targets:
@@ -100,9 +226,11 @@ The `connectors` module provides built-in nodes:
 
 * `ParquetSourceNode`
 * `ParquetSinkNode`
+* `JdbcSourceNode`
 * `SqlFilterNode`
 * `SelectNode`
 * `SqlTransformNode`
+* `IcebergSinkNode`
 * `JdbcSinkNode`
 
 It also provides Dagger-friendly programmatic factories and HOCON config factories for those nodes.
@@ -118,6 +246,8 @@ The `dagger` module wires Spark Boot construction:
 
 Dagger constructs Spark sessions, runtime services, and factory registries.
 Dagger does not define the pipeline DAG.
+Flow node ids are resolved only inside a flow.
+They are not Dagger binding keys.
 
 === dsl-kotlin
 
@@ -140,6 +270,7 @@ to write a Kotlin runner.
 
 The Kotlin DSL is the native programmatic API for developers.
 Use it when pipeline construction should benefit from Kotlin types, functions, branching, and normal application code.
+The DSL describes a graph; it does not run Spark actions while the graph is being built.
 
 === Basic Pipeline
 
@@ -427,6 +558,34 @@ parquetSource("orders") {
 }
 ----
 
+=== JdbcSource
+
+HOCON type: `JdbcSource`
+
+Required config:
+
+* `url`
+* `table`
+* `user`
+* `password`
+
+Optional config:
+
+* `driver`
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+jdbcSource("orders") {
+    url = "jdbc:mariadb://localhost:3306/orders"
+    table = "orders"
+    user = "spark"
+    password = "spark"
+    driver = "org.mariadb.jdbc.Driver"
+}
+----
+
 === ParquetSink
 
 HOCON type: `ParquetSink`
@@ -503,6 +662,44 @@ Required config:
 
 The input dataset is registered as a temporary view named by `plugin_input`.
 The SQL result is registered as a temporary view named by `plugin_output`.
+
+=== IcebergSink
+
+HOCON type: `IcebergSink`
+
+Required config:
+
+* `table`
+
+Optional config:
+
+* `save_mode` or `mode`
+
+Supported save modes:
+
+* `overwrite`
+* `append`
+* `ignore`
+* `error`
+* `errorifexists`
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+writeIceberg("iceberg-sink") {
+    table = "hms.default.paid_orders"
+    mode = SaveMode.Overwrite
+}
+----
+
+For HMS-backed Iceberg, configure Spark Boot before the Spark session is created:
+
+* `hive.metastore.uris` system property or `HIVE_METASTORE_URIS` environment variable
+* `spark.boot.iceberg.warehouse` system property or `SPARK_BOOT_ICEBERG_WAREHOUSE` environment variable
+
+When HMS is configured, Spark Boot enables Hive support and registers the `hms` Iceberg catalog.
+Use table names such as `hms.default.paid_orders`.
 
 === JdbcSink
 

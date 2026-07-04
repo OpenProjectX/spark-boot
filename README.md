@@ -9,7 +9,7 @@ It provides:
 - Dagger-based compile-time construction and factory registration
 - a portable Flow / Node / Edge model
 - a Spark 4 runtime backed by `org.openprojectx.spark.platform`
-- built-in Parquet, SQL filter/select/transform, and JDBC sink nodes
+- built-in Parquet, JDBC source/sink, SQL filter/select/transform, and Iceberg sink nodes
 
 Compatibility target:
 
@@ -61,6 +61,11 @@ fun main(args: Array<String>) = runSparkBoot(args) {
     }
 }
 ```
+
+In the Kotlin DSL, names such as `"orders"`, `"paid-only"`, and `"sink"` are flow-local node ids.
+They are used to register nodes and wire DAG edges; they are not Dagger bean names, Spark table names, or paths.
+The configuration lambda customizes a newly-created node instance before execution.
+Dagger supplies node factories and runtime services, while `SparkRuntime` executes the completed flow later.
 
 Publish the root project to Maven local before running examples:
 
