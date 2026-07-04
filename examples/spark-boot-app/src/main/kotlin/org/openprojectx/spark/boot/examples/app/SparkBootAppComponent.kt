@@ -3,9 +3,12 @@ package org.openprojectx.spark.boot.examples.app
 import dagger.Binds
 import dagger.Component
 import dagger.Module
+import dagger.Provides
 import dagger.multibindings.IntoMap
+import dagger.multibindings.IntoSet
 import dagger.multibindings.StringKey
 import javax.inject.Singleton
+import org.openprojectx.spark.boot.core.ProfiledProgrammaticNodeFactory
 import org.openprojectx.spark.boot.core.UntypedNodeFactory
 import org.openprojectx.spark.boot.dagger.BuiltinConnectorModule
 import org.openprojectx.spark.boot.dagger.RuntimeModule
@@ -18,6 +21,32 @@ interface SparkBootAppModule {
     @IntoMap
     @StringKey("InMemoryOrdersSource")
     fun bindInMemoryOrdersSourceFactory(factory: InMemoryOrdersSourceNodeFactory): UntypedNodeFactory
+
+    companion object {
+        @Provides
+        @IntoSet
+        fun provideLocalOrdersSourceFactory(
+            factory: LocalOrdersSourceNodeFactory
+        ): ProfiledProgrammaticNodeFactory {
+            return ProfiledProgrammaticNodeFactory(
+                kind = "ProfiledOrdersSource",
+                profiles = setOf("local"),
+                factory = factory
+            )
+        }
+
+        @Provides
+        @IntoSet
+        fun provideCiOrdersSourceFactory(
+            factory: CiOrdersSourceNodeFactory
+        ): ProfiledProgrammaticNodeFactory {
+            return ProfiledProgrammaticNodeFactory(
+                kind = "ProfiledOrdersSource",
+                profiles = setOf("ci"),
+                factory = factory
+            )
+        }
+    }
 }
 
 @Singleton

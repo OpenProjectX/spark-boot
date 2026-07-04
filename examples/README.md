@@ -39,6 +39,9 @@ The `:spark-boot-app` example shows the Spring Boot-style entry point with
 `@SparkBoot` and `runSparkBoot`; it also contributes a custom node factory
 through an app Dagger module and creates that node from the DSL with
 `node<InMemoryOrdersSourceNode>("orders", "InMemoryOrdersSource")`.
+It also demonstrates profile-aware Dagger factories: `application.conf` enables
+the `local` profile by default, and `--profile ci` switches the same
+`ProfiledOrdersSource` DSL kind to the CI factory.
 It is an application example, not a JUnit test.
 The `:hocon` example is config-only. The `org.openprojectx.bigdata-test`
 Gradle plugin starts LocalStack S3 and prepares the input Parquet data from

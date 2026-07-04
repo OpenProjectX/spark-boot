@@ -29,10 +29,12 @@ class SparkBootContext(
 
 fun runSparkBoot(
     args: Array<String> = emptyArray(),
-    component: SparkBootComponent = DaggerSparkBootComponent.create(),
+    component: SparkBootComponent? = null,
     block: SparkBootContext.() -> ExecutableFlow
 ) {
-    val context = SparkBootContext(args, component)
+    activateProfiles(args)
+    val sparkBootComponent = component ?: DaggerSparkBootComponent.create()
+    val context = SparkBootContext(args, sparkBootComponent)
     val spark = context.spark
 
     try {
@@ -40,4 +42,25 @@ fun runSparkBoot(
     } finally {
         spark.stop()
     }
+}
+
+fun activateProfiles(args: Array<String>) {
+    val profiles = args.profileArguments()
+    if (profiles.isNotEmpty() && System.getProperty("spark.boot.profiles.active").isNullOrBlank()) {
+        System.setProperty("spark.boot.profiles.active", profiles.joinToString(","))
+    }
+}
+
+private fun Array<String>.profileArguments(): List<String> {
+    return flatMapIndexed { index, arg ->
+        when {
+            arg == "--profile" || arg == "--spring.profiles.active" -> listOfNotNull(getOrNull(index + 1))
+            arg.startsWith("--profile=") -> listOf(arg.substringAfter("="))
+            arg.startsWith("--spring.profiles.active=") -> listOf(arg.substringAfter("="))
+            else -> emptyList()
+        }
+    }
+        .flatMap { value -> value.split(",", ";") }
+        .map(String::trim)
+        .filter(String::isNotBlank)
 }

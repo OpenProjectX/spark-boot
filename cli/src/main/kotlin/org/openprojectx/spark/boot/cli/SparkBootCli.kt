@@ -12,7 +12,10 @@ fun main(args: Array<String>) {
 
 object SparkBootCli {
     fun run(args: Array<String>) {
-        val configFile = args.firstOrNull()
+        val parsedArgs = SparkBootCliArgs.parse(args)
+        parsedArgs.activateProfiles()
+
+        val configFile = parsedArgs.configFile
             ?: error("Usage: spark-boot-cli <config-file>")
 
         val component = DaggerSparkBootComponent.create()
@@ -28,4 +31,54 @@ object SparkBootCli {
             spark.stop()
         }
     }
+}
+
+private data class SparkBootCliArgs(
+    val configFile: String?,
+    val profiles: List<String>
+) {
+    fun activateProfiles() {
+        if (profiles.isNotEmpty() && System.getProperty("spark.boot.profiles.active").isNullOrBlank()) {
+            System.setProperty("spark.boot.profiles.active", profiles.joinToString(","))
+        }
+    }
+
+    companion object {
+        fun parse(args: Array<String>): SparkBootCliArgs {
+            val profiles = mutableListOf<String>()
+            var configFile: String? = null
+            var index = 0
+
+            while (index < args.size) {
+                val arg = args[index]
+                when {
+                    arg == "--profile" || arg == "--spring.profiles.active" -> {
+                        profiles += args.getOrNull(index + 1).orEmpty().splitProfiles()
+                        index += 2
+                    }
+                    arg.startsWith("--profile=") -> {
+                        profiles += arg.substringAfter("=").splitProfiles()
+                        index += 1
+                    }
+                    arg.startsWith("--spring.profiles.active=") -> {
+                        profiles += arg.substringAfter("=").splitProfiles()
+                        index += 1
+                    }
+                    configFile == null -> {
+                        configFile = arg
+                        index += 1
+                    }
+                    else -> error("Unexpected argument: $arg")
+                }
+            }
+
+            return SparkBootCliArgs(configFile, profiles)
+        }
+    }
+}
+
+private fun String.splitProfiles(): List<String> {
+    return split(",", ";")
+        .map(String::trim)
+        .filter(String::isNotBlank)
 }

@@ -38,8 +38,21 @@ interface NodeFactory<out T : FlowNode<*, *>> : UntypedNodeFactory {
 }
 
 class ProgrammaticNodeFactoryRegistry(
-    private val factories: Map<String, @JvmSuppressWildcards UntypedNodeFactory>
+    factories: Map<String, @JvmSuppressWildcards UntypedNodeFactory>,
+    profiledFactories: Set<@JvmSuppressWildcards ProfiledProgrammaticNodeFactory> = emptySet(),
+    activeProfiles: Set<String> = emptySet()
 ) {
+    private val factories: Map<String, @JvmSuppressWildcards UntypedNodeFactory> =
+        mergeProfiledFactories(
+            baseFactories = factories,
+            profiledFactories = profiledFactories,
+            activeProfiles = activeProfiles,
+            kind = ProfiledProgrammaticNodeFactory::kind,
+            profiles = ProfiledProgrammaticNodeFactory::profiles,
+            factory = ProfiledProgrammaticNodeFactory::factory,
+            duplicateMessage = "programmatic node kind"
+        )
+
     @Suppress("UNCHECKED_CAST")
     fun <T : FlowNode<*, *>> create(kind: String): T {
         val factory = factories[kind]
@@ -51,4 +64,45 @@ class ProgrammaticNodeFactoryRegistry(
 
 interface ConfigNodeFactory {
     fun create(config: Map<String, Any?>): FlowNode<*, *>
+}
+
+data class ProfiledProgrammaticNodeFactory(
+    val kind: String,
+    val profiles: Set<String>,
+    val factory: UntypedNodeFactory
+)
+
+data class ProfiledConfigNodeFactory(
+    val type: String,
+    val profiles: Set<String>,
+    val factory: ConfigNodeFactory
+)
+
+internal fun <P, F> mergeProfiledFactories(
+    baseFactories: Map<String, F>,
+    profiledFactories: Set<P>,
+    activeProfiles: Set<String>,
+    kind: (P) -> String,
+    profiles: (P) -> Set<String>,
+    factory: (P) -> F,
+    duplicateMessage: String
+): Map<String, F> {
+    val activeProfileSet = activeProfiles.filter(String::isNotBlank).toSet()
+    val activeProfiledFactories = profiledFactories.filter { contribution ->
+        profiles(contribution).any { profile -> profile in activeProfileSet }
+    }
+
+    val duplicateKinds = activeProfiledFactories
+        .groupingBy(kind)
+        .eachCount()
+        .filterValues { count -> count > 1 }
+        .keys
+
+    require(duplicateKinds.isEmpty()) {
+        "Multiple active profiled factories matched the same $duplicateMessage: ${duplicateKinds.sorted()}"
+    }
+
+    return baseFactories + activeProfiledFactories.associate { contribution ->
+        kind(contribution) to factory(contribution)
+    }
 }

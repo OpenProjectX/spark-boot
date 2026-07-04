@@ -5,6 +5,7 @@ import dagger.Component
 import dagger.Module
 import dagger.Provides
 import dagger.multibindings.IntoMap
+import dagger.multibindings.Multibinds
 import dagger.multibindings.StringKey
 import javax.inject.Singleton
 import org.apache.spark.sql.SparkSession
@@ -33,6 +34,8 @@ import org.openprojectx.spark.boot.connectors.SqlTransformConfigFactory
 import org.openprojectx.spark.boot.connectors.SqlTransformNodeFactory
 import org.openprojectx.spark.boot.core.ConfigNodeFactory
 import org.openprojectx.spark.boot.core.NodeFactoryRegistry
+import org.openprojectx.spark.boot.core.ProfiledConfigNodeFactory
+import org.openprojectx.spark.boot.core.ProfiledProgrammaticNodeFactory
 import org.openprojectx.spark.boot.core.ProgrammaticNodeFactoryRegistry
 import org.openprojectx.spark.boot.core.UntypedNodeFactory
 import org.openprojectx.spark.boot.runtime.spark.SparkExecutionContext
@@ -204,7 +207,14 @@ object SparkModule {
 }
 
 @Module
-object RuntimeModule {
+abstract class RuntimeModule {
+    @Multibinds
+    abstract fun profiledConfigNodeFactories(): Set<ProfiledConfigNodeFactory>
+
+    @Multibinds
+    abstract fun profiledProgrammaticNodeFactories(): Set<ProfiledProgrammaticNodeFactory>
+
+    companion object {
     @Provides
     @Singleton
     fun provideSparkRuntime(context: SparkExecutionContext): SparkRuntime {
@@ -214,17 +224,22 @@ object RuntimeModule {
     @Provides
     @Singleton
     fun provideNodeFactoryRegistry(
-        factories: Map<String, @JvmSuppressWildcards ConfigNodeFactory>
+        factories: Map<String, @JvmSuppressWildcards ConfigNodeFactory>,
+        profiledFactories: Set<@JvmSuppressWildcards ProfiledConfigNodeFactory>,
+        properties: SparkBootProperties
     ): NodeFactoryRegistry {
-        return NodeFactoryRegistry(factories)
+        return NodeFactoryRegistry(factories, profiledFactories, properties.activeProfiles)
     }
 
     @Provides
     @Singleton
     fun provideProgrammaticNodeFactoryRegistry(
-        factories: Map<String, @JvmSuppressWildcards UntypedNodeFactory>
+        factories: Map<String, @JvmSuppressWildcards UntypedNodeFactory>,
+        profiledFactories: Set<@JvmSuppressWildcards ProfiledProgrammaticNodeFactory>,
+        properties: SparkBootProperties
     ): ProgrammaticNodeFactoryRegistry {
-        return ProgrammaticNodeFactoryRegistry(factories)
+        return ProgrammaticNodeFactoryRegistry(factories, profiledFactories, properties.activeProfiles)
+    }
     }
 }
 

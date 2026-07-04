@@ -95,6 +95,13 @@ This config can be partial. Stable values can live in
 ports can be supplied through system properties before the Dagger component is
 created.
 
+Spring-style profiles are supported for classpath config. Spark Boot loads
+`application.conf`, overlays `application-<profile>.conf`, and leaves system
+properties as the final override layer. Use `spark.boot.profiles.active`,
+`SPARK_BOOT_PROFILES_ACTIVE`, or `--profile ci` with the CLI/Kotlin launcher.
+Profile-aware Dagger node factories can also be contributed so the same DSL kind
+resolves to different app-provided factories per profile.
+
 Then flows can reference logical names instead of repeating connection details:
 
 ```kotlin

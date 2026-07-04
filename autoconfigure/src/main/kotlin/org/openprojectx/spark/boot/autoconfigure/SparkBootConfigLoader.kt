@@ -6,9 +6,23 @@ import com.typesafe.config.ConfigFactory
 object SparkBootConfigLoader {
     fun load(): SparkBootProperties {
         ConfigFactory.invalidateCaches()
-        val config = ConfigFactory.load()
+        val applicationConfig = ConfigFactory.defaultApplication()
+        val referenceConfig = ConfigFactory.defaultReference()
+        val initialConfig = ConfigFactory.defaultOverrides()
+            .withFallback(applicationConfig)
+            .withFallback(referenceConfig)
+            .resolve()
+        val activeProfiles = activeProfiles(initialConfig)
+        val profiledApplicationConfig = activeProfiles.fold(applicationConfig) { config, profile ->
+            ConfigFactory.parseResources("application-$profile.conf").withFallback(config)
+        }
+        val config = ConfigFactory.defaultOverrides()
+            .withFallback(profiledApplicationConfig)
+            .withFallback(referenceConfig)
+            .resolve()
+
         if (!config.hasPath("spark.boot")) {
-            return SparkBootProperties()
+            return SparkBootProperties(activeProfiles = activeProfiles)
         }
 
         val sparkBoot = config.getConfig("spark.boot")
@@ -43,6 +57,7 @@ object SparkBootConfigLoader {
         }
 
         return SparkBootProperties(
+            activeProfiles = activeProfiles,
             s3 = sparkBoot.optionalConfig("s3")?.let { s3Config ->
                 S3Properties(
                     endpoint = s3Config.optionalString("endpoint"),
@@ -75,6 +90,23 @@ object SparkBootConfigLoader {
             icebergCatalogs = explicitCatalogs + listOfNotNull(hmsCatalog)
         )
     }
+
+    private fun activeProfiles(config: Config): Set<String> {
+        val configuredProfiles = when {
+            config.hasPath("spark.boot.profiles.active") -> config.stringList("spark.boot.profiles.active")
+            config.hasPath("spark.profiles.active") -> config.stringList("spark.profiles.active")
+            else -> emptyList()
+        }
+
+        return (
+            configuredProfiles +
+                System.getenv("SPARK_BOOT_PROFILES_ACTIVE").splitProfiles() +
+                System.getenv("SPARK_PROFILES_ACTIVE").splitProfiles()
+            )
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .toSet()
+    }
 }
 
 private fun Config.children(): Map<String, Config> {
@@ -99,4 +131,20 @@ private fun Config.optionalString(path: String): String? {
 
 private fun Config.optionalBoolean(path: String): Boolean? {
     return if (hasPath(path)) getBoolean(path) else null
+}
+
+private fun Config.stringList(path: String): List<String> {
+    return if (getValue(path).valueType() == com.typesafe.config.ConfigValueType.LIST) {
+        getStringList(path)
+    } else {
+        getString(path).splitProfiles()
+    }
+}
+
+private fun String?.splitProfiles(): List<String> {
+    return this
+        ?.split(",", ";")
+        ?.map(String::trim)
+        ?.filter(String::isNotBlank)
+        .orEmpty()
 }

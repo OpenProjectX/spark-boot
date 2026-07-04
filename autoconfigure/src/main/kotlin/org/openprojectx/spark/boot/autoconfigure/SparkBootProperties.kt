@@ -1,6 +1,7 @@
 package org.openprojectx.spark.boot.autoconfigure
 
 data class SparkBootProperties(
+    val activeProfiles: Set<String> = emptySet(),
     val s3: S3Properties? = null,
     val hms: HmsProperties? = null,
     val jdbcConnections: Map<String, JdbcConnectionProperties> = emptyMap(),

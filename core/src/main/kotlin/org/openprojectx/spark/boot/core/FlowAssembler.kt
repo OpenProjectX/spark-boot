@@ -18,8 +18,21 @@ class FlowAssembler(
 }
 
 class NodeFactoryRegistry(
-    private val factories: Map<String, @JvmSuppressWildcards ConfigNodeFactory>
+    factories: Map<String, @JvmSuppressWildcards ConfigNodeFactory>,
+    profiledFactories: Set<@JvmSuppressWildcards ProfiledConfigNodeFactory> = emptySet(),
+    activeProfiles: Set<String> = emptySet()
 ) {
+    private val factories: Map<String, @JvmSuppressWildcards ConfigNodeFactory> =
+        mergeProfiledFactories(
+            baseFactories = factories,
+            profiledFactories = profiledFactories,
+            activeProfiles = activeProfiles,
+            kind = ProfiledConfigNodeFactory::type,
+            profiles = ProfiledConfigNodeFactory::profiles,
+            factory = ProfiledConfigNodeFactory::factory,
+            duplicateMessage = "config node type"
+        )
+
     fun create(definition: NodeDefinition): FlowNode<*, *> {
         val factory = factories[definition.type]
             ?: error("Unknown node type: ${definition.type}")

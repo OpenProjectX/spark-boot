@@ -24,3 +24,18 @@ fun SparkBootContext.paidOrdersFlow(
             mode = SaveMode.Overwrite
         }
 }
+
+fun SparkBootContext.profiledPaidOrdersFlow(output: String) = flow("profiled-paid-orders-app") {
+    node<InMemoryOrdersSourceNode>("orders", "ProfiledOrdersSource") {
+    }
+        .filterSql("paid-only") {
+            condition = "status = 'PAID'"
+        }
+        .select("select-columns") {
+            columns = listOf("id", "amount", "status")
+        }
+        .writeParquet("sink") {
+            path = output
+            mode = SaveMode.Overwrite
+        }
+}

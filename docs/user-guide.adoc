@@ -437,6 +437,24 @@ Partial config is supported: stable values can live in
 `src/main/resources/application.conf`, and deployment-specific or test-specific
 values can be supplied through system properties.
 
+Profiles are supported for classpath config. Spark Boot loads
+`application.conf` first, then overlays `application-<profile>.conf` for each
+active profile in declaration order. System properties remain the final override
+layer.
+
+[source,hocon]
+----
+spark.boot.profiles.active = "local,ci"
+----
+
+Profiles can also be supplied at launch:
+
+[source,bash]
+----
+java -Dspark.boot.profiles.active=ci ...
+spark-boot-cli --profile ci job.conf
+----
+
 [source,hocon]
 ----
 spark.boot {
@@ -499,6 +517,8 @@ The contract is:
 . `spark.boot.jdbc.connections.<name>` creates a named JDBC connection.
 . A node may still provide explicit `url`, `user`, `password`, or `driver`; explicit node values override the named connection values.
 . Dynamic tests may set only the missing paths as system properties before creating the Dagger component, for example `spark.boot.jdbc.connections.orders.url`.
+. Profile config files are ordinary Typesafe Config resources named `application-<profile>.conf`.
+. If you create a custom Dagger component yourself, activate CLI profiles before calling `Dagger...Component.create()`.
 
 Kotlin DSL:
 
@@ -598,6 +618,55 @@ val flow = sparkFlow("advanced-orders", component) {
 ----
 
 Use explicit names such as `transformDataFrame` because the code runs under Spark execution semantics.
+
+=== Profiled Dagger Contributions
+
+Dagger does not dynamically enable or disable modules at runtime the way Spring
+does. Spark Boot supports the Spring-style bean experience at the registry
+boundary instead: a Dagger module can contribute profile-specific node factories,
+and Spark Boot exposes only the factories whose profiles are active.
+
+[source,kotlin]
+----
+@Module
+interface AppModule {
+    companion object {
+        @Provides
+        @IntoSet
+        fun localOrders(factory: LocalOrdersSourceFactory) =
+            ProfiledProgrammaticNodeFactory(
+                kind = "OrdersSource",
+                profiles = setOf("local"),
+                factory = factory
+            )
+
+        @Provides
+        @IntoSet
+        fun ciOrders(factory: CiOrdersSourceFactory) =
+            ProfiledProgrammaticNodeFactory(
+                kind = "OrdersSource",
+                profiles = setOf("ci"),
+                factory = factory
+            )
+    }
+}
+----
+
+The DSL keeps the same shape for every environment:
+
+[source,kotlin]
+----
+node<OrdersSourceNode>("orders", "OrdersSource") {
+}
+----
+
+With profile `local`, Spark Boot creates `OrdersSource` through
+`LocalOrdersSourceFactory`. With profile `ci`, it uses `CiOrdersSourceFactory`.
+If multiple active profiled factories contribute the same kind, Spark Boot fails
+fast because the binding would be ambiguous.
+
+The same pattern is available for config-driven HOCON nodes through
+`ProfiledConfigNodeFactory`.
 
 == HOCON DSL
 
