@@ -589,14 +589,24 @@ Run only integration tests:
 env GRADLE_USER_HOME=/data/.gradle ./gradlew :integration-tests:test --no-configuration-cache
 ----
 
-Run the example application:
+Publish the root project to Maven local before running examples:
 
 [source,bash]
 ----
-env GRADLE_USER_HOME=/data/.gradle ./gradlew :examples:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew publishToMavenLocal --no-configuration-cache
 ----
 
-The default example expects Parquet data under `data/orders`.
+Run the standalone examples build:
+
+[source,bash]
+----
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+----
+
+The `examples` directory is an independent multi-module Gradle build.
+It is excluded from the root project and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
+The default Kotlin DSL example is self-contained.
+It creates temporary Parquet input, runs the flow, prints the paid orders, and stops Spark.
 
 == Current Limitations
 

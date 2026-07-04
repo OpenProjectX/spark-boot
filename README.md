@@ -28,7 +28,6 @@ not full Apache SeaTunnel runtime compatibility.
 | `dagger` | Dagger component, modules, and factory registry wiring. |
 | `dsl-kotlin` | Kotlin DSL and fluent pipeline chaining. |
 | `dsl-hocon` | SeaTunnel-style HOCON parser. |
-| `examples` | Runnable Kotlin DSL and HOCON entry points. |
 | `integration-tests` | Local Spark integration tests. |
 
 ## Quick Start
@@ -63,13 +62,20 @@ val flow = sparkFlow("paid-orders", component) {
 component.sparkRuntime().run(flow)
 ```
 
-Run the example application:
+Publish the root project to Maven local before running examples:
 
 ```bash
-env GRADLE_USER_HOME=/data/.gradle ./gradlew :examples:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew publishToMavenLocal --no-configuration-cache
 ```
 
-The example expects `data/orders` to exist as Parquet input.
+Run the standalone examples build:
+
+```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+```
+
+The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
+The current Kotlin DSL example is self-contained: it creates temporary Parquet input, runs the flow, prints the paid orders, and stops Spark.
 
 ## HOCON Example
 
