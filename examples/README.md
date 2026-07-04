@@ -30,6 +30,7 @@ Run individual app examples:
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run --no-configuration-cache
 ```
 
 The `:kotlin-dsl` example is self-contained. It creates temporary Parquet input,
@@ -43,11 +44,22 @@ The `:hocon` example is config-only. The `org.openprojectx.bigdata-test`
 Gradle plugin starts LocalStack S3 and prepares the input Parquet data from
 TOML config, then Gradle runs the Spark Boot CLI with `paid-orders.conf`.
 
-## Run Integration Examples
+## Run JDBC Iceberg HMS
 
-The `:jdbc-iceberg-hms` module is a heavier JUnit-backed example. It starts
-LocalStack S3, Hive Metastore, and a MariaDB Testcontainers source, then runs a
-HOCON flow from JDBC into an HMS-backed Iceberg table:
+The `:jdbc-iceberg-hms` module is both a runnable app and a JUnit-backed
+integration example. It starts LocalStack S3 and Hive Metastore through
+`org.openprojectx.bigdata-test`; the app itself depends on Testcontainers and
+starts `ghcr.io/openprojectx/dockerhub/library/mariadb:10.6.27-jammy` as the
+JDBC source. It runs equivalent HOCON and Kotlin DSL flows from JDBC into
+HMS-backed Iceberg tables.
+
+Run the app:
+
+```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run --no-configuration-cache
+```
+
+Run the tests:
 
 ```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:test --no-configuration-cache
