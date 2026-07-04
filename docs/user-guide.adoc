@@ -130,6 +130,12 @@ The `dsl-hocon` module parses SeaTunnel-style HOCON into `FlowDefinition`.
 It does not execute jobs directly.
 Execution still goes through `FlowAssembler` and `SparkRuntime`.
 
+=== cli
+
+The `cli` module provides a HOCON file runner.
+Use it when users should provide only a configuration file and should not need
+to write a Kotlin runner.
+
 == Kotlin DSL
 
 The Kotlin DSL is the native programmatic API for developers.
@@ -371,6 +377,15 @@ val executableFlow = FlowAssembler(component.nodeFactoryRegistry()).assemble(def
 component.sparkRuntime().run(executableFlow)
 ----
 
+The `cli` module packages that runner flow:
+
+[source,bash]
+----
+java -cp "<app-and-dependencies>" org.openprojectx.sparkboot.cli.SparkBootCliKt paid-orders.conf
+----
+
+The CLI expects one argument: the HOCON config file path.
+
 == Built-In Nodes
 
 === ParquetSource
@@ -601,12 +616,13 @@ Run the standalone examples build:
 [source,bash]
 ----
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 ----
 
 The `examples` directory is an independent multi-module Gradle build.
 It is excluded from the root project and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The default Kotlin DSL example is self-contained.
-It creates temporary Parquet input, runs the flow, prints the paid orders, and stops Spark.
+The Kotlin DSL and HOCON examples are self-contained.
+They create temporary Parquet input, run the flow, print the paid orders, and stop Spark.
 
 == Current Limitations
 

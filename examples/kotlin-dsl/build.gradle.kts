@@ -4,9 +4,6 @@ plugins {
     id("org.openprojectx.spark.platform") version "0.1.41"
 }
 
-val sparkBootVersion = providers.gradleProperty("sparkBootVersion")
-    .orElse("0.1.0-SNAPSHOT")
-
 kotlin {
     jvmToolchain(17)
 }
@@ -17,12 +14,14 @@ sparkPlatform {
 }
 
 dependencies {
-    implementation("org.openprojectx.spark.boot:core:${sparkBootVersion.get()}")
-    implementation("org.openprojectx.spark.boot:runtime-spark:${sparkBootVersion.get()}")
-    implementation("org.openprojectx.spark.boot:connectors:${sparkBootVersion.get()}")
-    implementation("org.openprojectx.spark.boot:dagger:${sparkBootVersion.get()}")
-    implementation("org.openprojectx.spark.boot:dsl-kotlin:${sparkBootVersion.get()}")
-    implementation("org.openprojectx.spark.boot:dsl-hocon:${sparkBootVersion.get()}")
+    val sparkBootVersion = rootProject.extra["sparkBootVersion"] as String
+
+    implementation("org.openprojectx.spark.boot:core:$sparkBootVersion")
+    implementation("org.openprojectx.spark.boot:runtime-spark:$sparkBootVersion")
+    implementation("org.openprojectx.spark.boot:connectors:$sparkBootVersion")
+    implementation("org.openprojectx.spark.boot:dagger:$sparkBootVersion")
+    implementation("org.openprojectx.spark.boot:dsl-kotlin:$sparkBootVersion")
+    implementation("org.openprojectx.spark.boot:dsl-hocon:$sparkBootVersion")
     implementation("com.typesafe:config:1.4.5")
 
     implementation("org.apache.spark:spark-sql_2.13")

@@ -37,3 +37,4 @@ dependencyResolutionManagement {
 rootProject.name = "spark-boot-examples"
 
 include("kotlin-dsl")
+include("hocon")

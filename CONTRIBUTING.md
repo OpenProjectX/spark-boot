@@ -36,6 +36,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew test --no-configuration-cache
 | `dagger` | Dagger component, modules, and factory map bindings. |
 | `dsl-kotlin` | Programmatic Kotlin DSL and Spark-native escape hatches. |
 | `dsl-hocon` | SeaTunnel-style HOCON parsing into `FlowDefinition`. |
+| `cli` | HOCON file runner built on the public library modules. |
 | `integration-tests` | Local Spark execution tests. |
 
 The `examples` directory is intentionally a separate multi-module Gradle build.
@@ -96,12 +97,14 @@ Compile the standalone examples build:
 
 ```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:compileKotlin --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:compileKotlin --no-configuration-cache
 ```
 
-Run the Kotlin DSL example:
+Run the examples:
 
 ```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 ```
 
 The runnable Kotlin DSL example creates temporary Parquet input itself. If you
@@ -138,7 +141,7 @@ Compatibility target:
 - HOCON parser changes include parser coverage or integration coverage.
 - Spark-owned dependencies remain managed through Spark Platform.
 - `./gradlew test --no-configuration-cache` passes, or the PR explains why it could not be run.
-- If examples changed, `./gradlew publishToMavenLocal --no-configuration-cache` and `./gradlew -p examples :kotlin-dsl:compileKotlin --no-configuration-cache` pass.
+- If examples changed, `./gradlew publishToMavenLocal --no-configuration-cache` and the affected `./gradlew -p examples :<example>:compileKotlin --no-configuration-cache` task pass.
 
 ## Non-Goals For Current Contributions
 

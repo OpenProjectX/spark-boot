@@ -28,6 +28,7 @@ not full Apache SeaTunnel runtime compatibility.
 | `dagger` | Dagger component, modules, and factory registry wiring. |
 | `dsl-kotlin` | Kotlin DSL and fluent pipeline chaining. |
 | `dsl-hocon` | SeaTunnel-style HOCON parser. |
+| `cli` | HOCON file runner for users who want to provide only config. |
 | `integration-tests` | Local Spark integration tests. |
 
 ## Quick Start
@@ -72,10 +73,21 @@ Run the standalone examples build:
 
 ```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 ```
 
 The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The current Kotlin DSL example is self-contained: it creates temporary Parquet input, runs the flow, prints the paid orders, and stops Spark.
+The Kotlin DSL and HOCON examples are self-contained: they create temporary Parquet input, run the flow, print the paid orders, and stop Spark.
+
+## CLI
+
+Applications can depend on the CLI module and provide only a HOCON config file:
+
+```bash
+java -cp "<app-and-dependencies>" org.openprojectx.sparkboot.cli.SparkBootCliKt paid-orders.conf
+```
+
+The CLI parses the config, assembles the flow with Dagger-backed built-in factories, and runs it with Spark.
 
 ## HOCON Example
 

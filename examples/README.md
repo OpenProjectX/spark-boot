@@ -22,10 +22,14 @@ From the repository root:
 
 ```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 ```
 
 The `:kotlin-dsl` example is self-contained. It creates temporary Parquet input,
 runs the flow, prints the paid orders, and stops Spark.
+The `:hocon` example is also self-contained. It creates temporary Parquet input,
+materializes the sample `paid-orders.conf`, runs the Spark Boot CLI, prints the
+paid orders, and stops Spark.
 
 ## Adding More Examples
 
