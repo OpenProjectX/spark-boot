@@ -31,6 +31,16 @@ The `:hocon` example is config-only. The `org.openprojectx.bigdata-test`
 Gradle plugin starts LocalStack S3 and prepares the input Parquet data from
 TOML config, then Gradle runs the Spark Boot CLI with `paid-orders.conf`.
 
+## Run Integration Examples
+
+The `:jdbc-iceberg-hms` module is a heavier JUnit-backed example. It starts
+LocalStack S3, Hive Metastore, and a MariaDB Testcontainers source, then runs a
+HOCON flow from JDBC into an HMS-backed Iceberg table:
+
+```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:test --no-configuration-cache
+```
+
 ## Adding More Examples
 
 Add a new subdirectory with its own `build.gradle.kts`, then include it in `examples/settings.gradle.kts`:

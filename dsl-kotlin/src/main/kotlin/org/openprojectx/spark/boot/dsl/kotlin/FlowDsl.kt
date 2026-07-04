@@ -2,6 +2,8 @@ package org.openprojectx.spark.boot.dsl.kotlin
 
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.Row
+import org.openprojectx.spark.boot.connectors.IcebergSinkNode
+import org.openprojectx.spark.boot.connectors.JdbcSourceNode
 import org.openprojectx.spark.boot.connectors.ParquetSinkNode
 import org.openprojectx.spark.boot.connectors.ParquetSourceNode
 import org.openprojectx.spark.boot.connectors.SelectNode
@@ -66,6 +68,12 @@ class SparkFlowBuilder(
         return register(id, node)
     }
 
+    fun jdbcSource(id: String, customize: JdbcSourceNode.() -> Unit): NodeRef<JdbcSourceNode> {
+        val node = component.jdbcSourceNodeFactory().create()
+        node.customize()
+        return register(id, node)
+    }
+
     fun sqlFilter(id: String, customize: SqlFilterNode.() -> Unit): NodeRef<SqlFilterNode> {
         val node = component.sqlFilterNodeFactory().create()
         node.customize()
@@ -80,6 +88,12 @@ class SparkFlowBuilder(
 
     fun parquetSink(id: String, customize: ParquetSinkNode.() -> Unit): NodeRef<ParquetSinkNode> {
         val node = component.parquetSinkNodeFactory().create()
+        node.customize()
+        return register(id, node)
+    }
+
+    fun icebergSink(id: String, customize: IcebergSinkNode.() -> Unit): NodeRef<IcebergSinkNode> {
+        val node = component.icebergSinkNodeFactory().create()
         node.customize()
         return register(id, node)
     }
@@ -116,6 +130,12 @@ fun NodeRef<*>.select(id: String, customize: SelectNode.() -> Unit): NodeRef<Sel
 
 fun NodeRef<*>.writeParquet(id: String, customize: ParquetSinkNode.() -> Unit): NodeRef<ParquetSinkNode> {
     val next = sparkBuilder().parquetSink(id, customize)
+    then(next)
+    return next
+}
+
+fun NodeRef<*>.writeIceberg(id: String, customize: IcebergSinkNode.() -> Unit): NodeRef<IcebergSinkNode> {
+    val next = sparkBuilder().icebergSink(id, customize)
     then(next)
     return next
 }

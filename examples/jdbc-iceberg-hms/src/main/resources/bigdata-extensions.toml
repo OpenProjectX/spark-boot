@@ -1,0 +1,3 @@
+[[s3Buckets]]
+id = "spark-boot-jdbc-iceberg-hms-bucket"
+bucket = "spark-boot-jdbc-iceberg-hms"

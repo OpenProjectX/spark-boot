@@ -1,8 +1,9 @@
-package org.openprojectx.spark.boot.examples.hocon
+package org.openprojectx.spark.boot.examples.jdbciceberghms
 
 import com.typesafe.config.ConfigFactory
 import java.sql.DriverManager
 import java.time.Duration
+import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.SparkSession
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -11,6 +12,8 @@ import org.openprojectx.spark.boot.core.FlowAssembler
 import org.openprojectx.spark.boot.dagger.DaggerSparkBootComponent
 import org.openprojectx.spark.boot.dagger.SparkBootComponent
 import org.openprojectx.spark.boot.dsl.hocon.SeaTunnelStyleConfigParser
+import org.openprojectx.spark.boot.dsl.kotlin.sparkFlow
+import org.openprojectx.spark.boot.dsl.kotlin.writeIceberg
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.utility.DockerImageName
@@ -38,16 +41,38 @@ class JdbcIcebergHmsExampleTest {
             component.sparkSession().sql("CREATE NAMESPACE IF NOT EXISTS hms.spark_boot_demo")
             component.runConfig(jdbcToIcebergConfig(mariaDb.mysqlJdbcUrl))
 
-            val rows = component.sparkSession()
-                .sql("SELECT id, amount, status FROM hms.spark_boot_demo.jdbc_orders ORDER BY id")
-                .collectAsList()
+            assertIcebergRows(component.sparkSession(), "hms.spark_boot_demo.jdbc_orders")
+        }
+    }
 
-            val values = rows.map { row ->
-                Triple(row.getString(0), row.getString(1), row.getString(2))
+    @Test
+    fun `runs kotlin dsl jdbc source into hms iceberg table`() {
+        MariaDbContainer().use { mariaDb ->
+            mariaDb.start()
+            seedOrders(mariaDb.jdbcUrl)
+            assertSeededOrders(mariaDb.jdbcUrl)
+
+            val component = DaggerSparkBootComponent.create()
+            spark = component.sparkSession()
+            assertJdbcSourceRows(component.sparkSession(), mariaDb.mysqlJdbcUrl)
+            component.sparkSession().sql("CREATE NAMESPACE IF NOT EXISTS hms.spark_boot_demo")
+
+            val flow = sparkFlow("jdbc-to-iceberg-hms-kotlin", component) {
+                jdbcSource("jdbc_orders") {
+                    url = mariaDb.mysqlJdbcUrl
+                    table = "jdbc_orders"
+                    user = DB_USER
+                    password = DB_PASSWORD
+                    driver = "com.mysql.cj.jdbc.Driver"
+                }.writeIceberg("sink") {
+                    table = "hms.spark_boot_demo.jdbc_orders_kotlin"
+                    mode = SaveMode.Overwrite
+                }
             }
 
-            assertTrue(values.any { it.first == "1" && it.third == "PAID" }, "Expected paid order in $values")
-            assertTrue(values.any { it.first == "2" && it.third == "CANCELLED" }, "Expected cancelled order in $values")
+            component.sparkRuntime().run(flow)
+
+            assertIcebergRows(component.sparkSession(), "hms.spark_boot_demo.jdbc_orders_kotlin")
         }
     }
 
@@ -116,6 +141,19 @@ class JdbcIcebergHmsExampleTest {
 
         assertTrue(values.any { it.first == "1" && it.third == "PAID" }, "Expected JDBC paid order in $values")
         assertTrue(values.any { it.first == "2" && it.third == "CANCELLED" }, "Expected JDBC cancelled order in $values")
+    }
+
+    private fun assertIcebergRows(spark: SparkSession, table: String) {
+        val rows = spark
+            .sql("SELECT id, amount, status FROM $table ORDER BY id")
+            .collectAsList()
+
+        val values = rows.map { row ->
+            Triple(row.getString(0), row.getString(1), row.getString(2))
+        }
+
+        assertTrue(values.any { it.first == "1" && it.third == "PAID" }, "Expected paid order in $values")
+        assertTrue(values.any { it.first == "2" && it.third == "CANCELLED" }, "Expected cancelled order in $values")
     }
 
     private fun SparkBootComponent.runConfig(configText: String) {
