@@ -62,6 +62,16 @@ fun flow(name: String, block: FlowBuilder.() -> Unit): ExecutableFlow {
 class SparkFlowBuilder(
     private val component: SparkBootComponent
 ) : FlowBuilder() {
+    fun <T : FlowNode<*, *>> node(
+        id: String,
+        kind: String,
+        customize: T.() -> Unit
+    ): NodeRef<T> {
+        val node = component.programmaticNodeFactoryRegistry().create<T>(kind)
+        node.customize()
+        return register(id, node)
+    }
+
     fun parquetSource(id: String, customize: ParquetSourceNode.() -> Unit): NodeRef<ParquetSourceNode> {
         val node = component.parquetSourceNodeFactory().create()
         node.customize()

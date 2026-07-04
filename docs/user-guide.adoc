@@ -326,6 +326,103 @@ fun main(args: Array<String>) = runSparkBoot(args) {
 }
 ----
 
+=== User-Provided Dagger Nodes
+
+Applications can contribute node factories through Dagger, similar to how a Spring Boot app contributes beans.
+The important difference is that Dagger contributions are compile-time bindings, not runtime bean lookups.
+
+The DSL shape is:
+
+[source,kotlin]
+----
+node<InMemoryOrdersSourceNode>("orders", "InMemoryOrdersSource") {
+    orders = listOf(
+        Order(id = "1", amount = 10.0, status = "PAID"),
+        Order(id = "2", amount = 20.0, status = "CANCELLED")
+    )
+}
+----
+
+The semantic contract is:
+
+. `"InMemoryOrdersSource"` is the programmatic node kind. It selects a Dagger-registered factory.
+. `"orders"` is the flow-local node id. It is used for DAG registration and edge wiring.
+. Dagger creates the node through the registered factory.
+. The lambda customizes the created node instance.
+. The configured node instance is registered into the flow.
+
+Define the node and factory:
+
+[source,kotlin]
+----
+class InMemoryOrdersSourceNode : SparkSourceNode<Dataset<Row>> {
+    var orders: List<Order> = emptyList()
+
+    override val name: String = "in-memory-orders-source"
+
+    override fun execute(input: Unit, context: SparkExecutionContext): Dataset<Row> {
+        return context.spark.createDataFrame(orders, Order::class.java)
+    }
+}
+
+class InMemoryOrdersSourceNodeFactory @Inject constructor() :
+    NodeFactory<InMemoryOrdersSourceNode> {
+    override fun create(): InMemoryOrdersSourceNode = InMemoryOrdersSourceNode()
+}
+----
+
+Bind the factory into Spark Boot's programmatic factory map:
+
+[source,kotlin]
+----
+@Module
+interface AppNodesModule {
+    @Binds
+    @IntoMap
+    @StringKey("InMemoryOrdersSource")
+    fun bindInMemoryOrdersSourceFactory(
+        factory: InMemoryOrdersSourceNodeFactory
+    ): UntypedNodeFactory
+}
+----
+
+Build an app component from Spark Boot modules plus the app module:
+
+[source,kotlin]
+----
+@Singleton
+@Component(
+    modules = [
+        SparkModule::class,
+        RuntimeModule::class,
+        BuiltinConnectorModule::class,
+        AppNodesModule::class
+    ]
+)
+interface AppComponent : SparkBootComponent
+----
+
+Pass that component to `runSparkBoot`:
+
+[source,kotlin]
+----
+@SparkBoot
+fun main(args: Array<String>) = runSparkBoot(args, DaggerAppComponent.create()) {
+    flow("paid-orders") {
+        node<InMemoryOrdersSourceNode>("orders", "InMemoryOrdersSource") {
+            orders = listOf(Order(id = "1", amount = 10.0, status = "PAID"))
+        }
+            .filterSql("paid-only") {
+                condition = "status = 'PAID'"
+            }
+            .writeParquet("sink") {
+                path = "output/paid-orders"
+                mode = SaveMode.Overwrite
+            }
+    }
+}
+----
+
 === Explicit Edges
 
 For branching or non-linear flows, assign node references and connect them explicitly.
@@ -765,7 +862,24 @@ class MyTransformNodeFactory @Inject constructor() : NodeFactory<MyTransformNode
 }
 ----
 
-Expose it from a DSL builder or through a project-specific extension function.
+Bind it into the programmatic factory map:
+
+[source,kotlin]
+----
+@Binds
+@IntoMap
+@StringKey("MyTransform")
+fun bindMyTransformFactory(factory: MyTransformNodeFactory): UntypedNodeFactory
+----
+
+Then Kotlin DSL can create it by kind and register it by flow-local id:
+
+[source,kotlin]
+----
+node<MyTransformNode>("normalize-orders", "MyTransform") {
+    // configure node properties here
+}
+----
 
 === Add a HOCON Node
 

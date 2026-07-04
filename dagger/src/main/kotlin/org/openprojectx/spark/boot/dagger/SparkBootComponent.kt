@@ -26,6 +26,8 @@ import org.openprojectx.spark.boot.connectors.SqlTransformConfigFactory
 import org.openprojectx.spark.boot.connectors.SqlTransformNodeFactory
 import org.openprojectx.spark.boot.core.ConfigNodeFactory
 import org.openprojectx.spark.boot.core.NodeFactoryRegistry
+import org.openprojectx.spark.boot.core.ProgrammaticNodeFactoryRegistry
+import org.openprojectx.spark.boot.core.UntypedNodeFactory
 import org.openprojectx.spark.boot.runtime.spark.SparkExecutionContext
 import org.openprojectx.spark.boot.runtime.spark.SparkRuntime
 
@@ -42,6 +44,7 @@ interface SparkBootComponent {
     fun sparkExecutionContext(): SparkExecutionContext
     fun sparkRuntime(): SparkRuntime
     fun nodeFactoryRegistry(): NodeFactoryRegistry
+    fun programmaticNodeFactoryRegistry(): ProgrammaticNodeFactoryRegistry
 
     fun parquetSourceNodeFactory(): ParquetSourceNodeFactory
     fun parquetSinkNodeFactory(): ParquetSinkNodeFactory
@@ -160,10 +163,58 @@ object RuntimeModule {
     ): NodeFactoryRegistry {
         return NodeFactoryRegistry(factories)
     }
+
+    @Provides
+    @Singleton
+    fun provideProgrammaticNodeFactoryRegistry(
+        factories: Map<String, @JvmSuppressWildcards UntypedNodeFactory>
+    ): ProgrammaticNodeFactoryRegistry {
+        return ProgrammaticNodeFactoryRegistry(factories)
+    }
 }
 
 @Module
 interface BuiltinConnectorModule {
+    @Binds
+    @IntoMap
+    @StringKey("ParquetSource")
+    fun bindProgrammaticParquetSourceFactory(factory: ParquetSourceNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("ParquetSink")
+    fun bindProgrammaticParquetSinkFactory(factory: ParquetSinkNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("JdbcSource")
+    fun bindProgrammaticJdbcSourceFactory(factory: JdbcSourceNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("IcebergSink")
+    fun bindProgrammaticIcebergSinkFactory(factory: IcebergSinkNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("SqlFilterTransform")
+    fun bindProgrammaticSqlFilterFactory(factory: SqlFilterNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("SelectTransform")
+    fun bindProgrammaticSelectFactory(factory: SelectNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("SqlTransform")
+    fun bindProgrammaticSqlTransformFactory(factory: SqlTransformNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("JdbcSink")
+    fun bindProgrammaticJdbcSinkFactory(factory: JdbcSinkNodeFactory): UntypedNodeFactory
+
     @Binds
     @IntoMap
     @StringKey("ParquetSource")

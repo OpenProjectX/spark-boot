@@ -66,6 +66,8 @@ In the Kotlin DSL, names such as `"orders"`, `"paid-only"`, and `"sink"` are flo
 They are used to register nodes and wire DAG edges; they are not Dagger bean names, Spark table names, or paths.
 The configuration lambda customizes a newly-created node instance before execution.
 Dagger supplies node factories and runtime services, while `SparkRuntime` executes the completed flow later.
+Applications can contribute their own node factories through Dagger multibindings and create them in the DSL with `node<MyNode>("orders", "MyNodeKind") { ... }`.
+In that shape, `"MyNodeKind"` selects the Dagger-registered factory and `"orders"` remains the flow-local node id.
 
 Publish the root project to Maven local before running examples:
 
@@ -83,7 +85,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configu
 ```
 
 The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The Kotlin DSL examples create temporary Parquet input in code. The `:spark-boot-app` example shows the `@SparkBoot` application entry point. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`.
+The Kotlin DSL examples create temporary Parquet input in code. The `:spark-boot-app` example shows the `@SparkBoot` application entry point and a user-provided Dagger node factory used from the DSL. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`.
 
 ## CLI
 

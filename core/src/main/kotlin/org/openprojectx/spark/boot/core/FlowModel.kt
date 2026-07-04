@@ -29,8 +29,24 @@ interface FlowNode<I, O> {
     val name: String
 }
 
-interface NodeFactory<T : FlowNode<*, *>> {
-    fun create(): T
+interface UntypedNodeFactory {
+    fun create(): FlowNode<*, *>
+}
+
+interface NodeFactory<out T : FlowNode<*, *>> : UntypedNodeFactory {
+    override fun create(): T
+}
+
+class ProgrammaticNodeFactoryRegistry(
+    private val factories: Map<String, @JvmSuppressWildcards UntypedNodeFactory>
+) {
+    @Suppress("UNCHECKED_CAST")
+    fun <T : FlowNode<*, *>> create(kind: String): T {
+        val factory = factories[kind]
+            ?: error("Unknown programmatic node kind: $kind")
+
+        return factory.create() as T
+    }
 }
 
 interface ConfigNodeFactory {
