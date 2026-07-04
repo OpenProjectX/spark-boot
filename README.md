@@ -22,6 +22,7 @@ not full Apache SeaTunnel runtime compatibility.
 
 | Module | Purpose |
 | --- | --- |
+| `autoconfigure` | Spring Boot-style config properties and connection/catalog registries. |
 | `core` | Flow model, node definitions, factory contracts, and assembler. |
 | `runtime-spark` | Spark execution context, Spark node contracts, DAG validation, and runtime execution. |
 | `connectors` | Built-in Spark nodes and config factories. |
@@ -69,6 +70,38 @@ Dagger supplies node factories and runtime services, while `SparkRuntime` execut
 Applications can contribute their own node factories through Dagger multibindings and create them in the DSL with `node<MyNode>("orders", "MyNodeKind") { ... }`.
 In that shape, `"MyNodeKind"` selects the Dagger-registered factory and `"orders"` remains the flow-local node id.
 
+Spark Boot also supports starter-style environment configuration for shared
+infrastructure such as JDBC connections, S3, HMS, and Iceberg catalogs:
+
+```hocon
+spark.boot {
+  jdbc.connections.orders {
+    url = "jdbc:mysql://localhost:3306/orders"
+    user = "spark"
+    password = "spark"
+    driver = "com.mysql.cj.jdbc.Driver"
+  }
+
+  hms {
+    uri = "thrift://localhost:9083"
+    warehouse = "s3a://warehouse/iceberg"
+    catalog = "hms"
+  }
+}
+```
+
+Then flows can reference logical names instead of repeating connection details:
+
+```kotlin
+jdbcSource("orders") {
+    connection = "orders"
+    table = "jdbc_orders"
+}.writeIceberg("sink") {
+    catalog = "hms"
+    table = "default.jdbc_orders"
+}
+```
+
 Publish the root project to Maven local before running examples:
 
 ```bash
@@ -86,7 +119,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run -
 ```
 
 The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The Kotlin DSL examples create temporary Parquet input in code. The `:spark-boot-app` example shows the `@SparkBoot` application entry point and a user-provided Dagger node factory used from the DSL. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`. The `:jdbc-iceberg-hms` app starts LocalStack S3, Hive Metastore, and a MariaDB Testcontainers source, then writes JDBC data into HMS-backed Iceberg tables.
+The Kotlin DSL examples create temporary Parquet input in code. The `:spark-boot-app` example shows the `@SparkBoot` application entry point and a user-provided Dagger node factory used from the DSL. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`. The `:jdbc-iceberg-hms` app starts LocalStack S3, Hive Metastore, and a MariaDB Testcontainers source, then writes JDBC data into HMS-backed Iceberg tables through named `orders` JDBC and `hms` catalog config.
 
 ## CLI
 

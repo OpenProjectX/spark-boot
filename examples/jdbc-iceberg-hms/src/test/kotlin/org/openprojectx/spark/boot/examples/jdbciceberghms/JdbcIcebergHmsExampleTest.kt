@@ -21,12 +21,13 @@ class JdbcIcebergHmsExampleTest {
             mariaDb.start()
             seedOrders(mariaDb.jdbcUrl)
             assertSeededOrders(mariaDb.jdbcUrl)
+            configureSparkBootConnections(mariaDb.mysqlJdbcUrl)
 
             val component = DaggerSparkBootComponent.create()
             spark = component.sparkSession()
             assertJdbcSourceRows(component.sparkSession(), mariaDb.mysqlJdbcUrl)
             component.sparkSession().sql("CREATE NAMESPACE IF NOT EXISTS hms.spark_boot_demo")
-            component.runConfig(jdbcToIcebergConfig(mariaDb.mysqlJdbcUrl))
+            component.runConfig(jdbcToIcebergConfig())
 
             assertIcebergRows(component.sparkSession(), "hms.spark_boot_demo.jdbc_orders")
         }
@@ -38,12 +39,13 @@ class JdbcIcebergHmsExampleTest {
             mariaDb.start()
             seedOrders(mariaDb.jdbcUrl)
             assertSeededOrders(mariaDb.jdbcUrl)
+            configureSparkBootConnections(mariaDb.mysqlJdbcUrl)
 
             val component = DaggerSparkBootComponent.create()
             spark = component.sparkSession()
             assertJdbcSourceRows(component.sparkSession(), mariaDb.mysqlJdbcUrl)
             component.sparkSession().sql("CREATE NAMESPACE IF NOT EXISTS hms.spark_boot_demo")
-            component.runKotlinJdbcToIcebergFlow(mariaDb.mysqlJdbcUrl)
+            component.runKotlinJdbcToIcebergFlow()
 
             assertIcebergRows(component.sparkSession(), "hms.spark_boot_demo.jdbc_orders_kotlin")
         }

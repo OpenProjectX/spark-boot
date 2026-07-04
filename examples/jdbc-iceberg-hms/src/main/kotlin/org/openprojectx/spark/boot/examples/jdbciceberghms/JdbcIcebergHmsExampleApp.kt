@@ -11,16 +11,17 @@ fun main(args: Array<String>) {
         mariaDb.start()
         seedOrders(mariaDb.jdbcUrl)
         assertSeededOrders(mariaDb.jdbcUrl)
+        configureSparkBootConnections(mariaDb.mysqlJdbcUrl)
 
         runSparkBootApplication(args) {
             val spark = spark
             assertJdbcSourceRows(spark, mariaDb.mysqlJdbcUrl)
             spark.sql("CREATE NAMESPACE IF NOT EXISTS hms.spark_boot_demo")
 
-            component.runConfig(jdbcToIcebergConfig(mariaDb.mysqlJdbcUrl))
+            component.runConfig(jdbcToIcebergConfig())
             assertIcebergRows(spark, "hms.spark_boot_demo.jdbc_orders")
 
-            component.runKotlinJdbcToIcebergFlow(mariaDb.mysqlJdbcUrl)
+            component.runKotlinJdbcToIcebergFlow()
             assertIcebergRows(spark, "hms.spark_boot_demo.jdbc_orders_kotlin")
         }
     }

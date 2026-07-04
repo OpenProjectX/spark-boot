@@ -4,6 +4,8 @@ import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.functions
+import org.openprojectx.spark.boot.autoconfigure.IcebergCatalogRegistry
+import org.openprojectx.spark.boot.autoconfigure.JdbcConnectionRegistry
 import org.openprojectx.spark.boot.runtime.spark.SparkExecutionContext
 import org.openprojectx.spark.boot.runtime.spark.SparkSinkNode
 import org.openprojectx.spark.boot.runtime.spark.SparkSourceNode
@@ -32,61 +34,88 @@ class ParquetSinkNode : SparkSinkNode<Dataset<Row>> {
     }
 }
 
-class JdbcSourceNode : SparkSourceNode<Dataset<Row>> {
-    lateinit var url: String
+class JdbcSourceNode(
+    private val jdbcConnectionRegistry: JdbcConnectionRegistry? = null
+) : SparkSourceNode<Dataset<Row>> {
+    var connection: String? = null
+    var url: String? = null
     lateinit var table: String
-    lateinit var user: String
-    lateinit var password: String
+    var user: String? = null
+    var password: String? = null
     var driver: String? = null
 
     override val name: String = "jdbc-source"
 
     override fun execute(input: Unit, context: SparkExecutionContext): Dataset<Row> {
+        val configured = connection?.let { connectionName ->
+            jdbcConnectionRegistry?.get(connectionName)
+                ?: error("JDBC connection '$connectionName' requires JdbcConnectionRegistry")
+        }
+        val jdbcUrl = url ?: configured?.url ?: error("Missing JDBC url")
+        val jdbcUser = user ?: configured?.user ?: error("Missing JDBC user")
+        val jdbcPassword = password ?: configured?.password ?: error("Missing JDBC password")
+        val jdbcDriver = driver ?: configured?.driver
+
         val reader = context.spark.read()
             .format("jdbc")
-            .option("url", url)
+            .option("url", jdbcUrl)
             .option("dbtable", table)
-            .option("user", user)
-            .option("password", password)
-        driver?.let { reader.option("driver", it) }
+            .option("user", jdbcUser)
+            .option("password", jdbcPassword)
+        jdbcDriver?.let { reader.option("driver", it) }
         return reader.load()
     }
 }
 
-class IcebergSinkNode : SparkSinkNode<Dataset<Row>> {
+class IcebergSinkNode(
+    private val icebergCatalogRegistry: IcebergCatalogRegistry? = null
+) : SparkSinkNode<Dataset<Row>> {
+    var catalog: String? = null
     lateinit var table: String
     var mode: SaveMode = SaveMode.ErrorIfExists
 
     override val name: String = "iceberg-sink"
 
     override fun execute(input: Dataset<Row>, context: SparkExecutionContext) {
+        val resolvedTable = resolvedTable()
         val output = input.localCheckpoint(true)
         when (mode) {
             SaveMode.Overwrite -> {
-                context.spark.sql("DROP TABLE IF EXISTS $table")
-                createTable(output, context)
-                output.writeTo(table).append()
+                context.spark.sql("DROP TABLE IF EXISTS $resolvedTable")
+                createTable(output, context, resolvedTable)
+                output.writeTo(resolvedTable).append()
             }
-            SaveMode.Append -> output.writeTo(table).append()
-            SaveMode.Ignore -> if (!tableExists(context)) {
-                createTable(output, context)
-                output.writeTo(table).append()
+            SaveMode.Append -> output.writeTo(resolvedTable).append()
+            SaveMode.Ignore -> if (!tableExists(context, resolvedTable)) {
+                createTable(output, context, resolvedTable)
+                output.writeTo(resolvedTable).append()
             }
             SaveMode.ErrorIfExists -> {
-                check(!tableExists(context)) { "Iceberg table already exists: $table" }
-                createTable(output, context)
-                output.writeTo(table).append()
+                check(!tableExists(context, resolvedTable)) { "Iceberg table already exists: $resolvedTable" }
+                createTable(output, context, resolvedTable)
+                output.writeTo(resolvedTable).append()
             }
         }
     }
 
-    private fun createTable(input: Dataset<Row>, context: SparkExecutionContext) {
-        context.spark.sql("CREATE TABLE $table (${input.schema().toDDL()}) USING iceberg")
+    private fun resolvedTable(): String {
+        val catalogName = catalog ?: return table
+        icebergCatalogRegistry?.get(catalogName)
+            ?: error("Iceberg catalog '$catalogName' requires IcebergCatalogRegistry")
+        return if (table == catalogName || table.startsWith("$catalogName.")) {
+            table
+        } else {
+            "$catalogName.$table"
+        }
     }
 
-    private fun tableExists(context: SparkExecutionContext): Boolean {
+    private fun createTable(input: Dataset<Row>, context: SparkExecutionContext, resolvedTable: String) {
+        context.spark.sql("CREATE TABLE $resolvedTable (${input.schema().toDDL()}) USING iceberg")
+    }
+
+    private fun tableExists(context: SparkExecutionContext, resolvedTable: String): Boolean {
         return runCatching {
-            context.spark.table(table).queryExecution().analyzed()
+            context.spark.table(resolvedTable).queryExecution().analyzed()
             true
         }.getOrDefault(false)
     }
@@ -127,23 +156,34 @@ class SqlTransformNode : SparkTransformNode<Dataset<Row>, Dataset<Row>> {
     }
 }
 
-class JdbcSinkNode : SparkSinkNode<Dataset<Row>> {
-    lateinit var url: String
+class JdbcSinkNode(
+    private val jdbcConnectionRegistry: JdbcConnectionRegistry? = null
+) : SparkSinkNode<Dataset<Row>> {
+    var connection: String? = null
+    var url: String? = null
     lateinit var table: String
-    lateinit var user: String
-    lateinit var password: String
+    var user: String? = null
+    var password: String? = null
     var mode: SaveMode = SaveMode.Append
 
     override val name: String = "jdbc-sink"
 
     override fun execute(input: Dataset<Row>, context: SparkExecutionContext) {
+        val configured = connection?.let { connectionName ->
+            jdbcConnectionRegistry?.get(connectionName)
+                ?: error("JDBC connection '$connectionName' requires JdbcConnectionRegistry")
+        }
+        val jdbcUrl = url ?: configured?.url ?: error("Missing JDBC url")
+        val jdbcUser = user ?: configured?.user ?: error("Missing JDBC user")
+        val jdbcPassword = password ?: configured?.password ?: error("Missing JDBC password")
+
         input.write()
             .mode(mode)
             .format("jdbc")
-            .option("url", url)
+            .option("url", jdbcUrl)
             .option("dbtable", table)
-            .option("user", user)
-            .option("password", password)
+            .option("user", jdbcUser)
+            .option("password", jdbcPassword)
             .save()
     }
 }

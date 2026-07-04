@@ -96,22 +96,35 @@ fun assertIcebergRows(spark: SparkSession, table: String) {
     }
 }
 
+fun configureSparkBootConnections(jdbcUrl: String) {
+    System.setProperty("spark.boot.jdbc.connections.orders.url", jdbcUrl)
+    System.setProperty("spark.boot.jdbc.connections.orders.user", DB_USER)
+    System.setProperty("spark.boot.jdbc.connections.orders.password", DB_PASSWORD)
+    System.setProperty("spark.boot.jdbc.connections.orders.driver", "com.mysql.cj.jdbc.Driver")
+
+    System.getProperty("hive.metastore.uris")?.let { metastoreUris ->
+        System.setProperty("spark.boot.hms.uri", metastoreUris)
+    }
+    System.getProperty("spark.boot.iceberg.warehouse")?.let { warehouse ->
+        System.setProperty("spark.boot.hms.warehouse", warehouse)
+    }
+    System.setProperty("spark.boot.hms.catalog", "hms")
+}
+
 fun SparkBootComponent.runConfig(configText: String) {
     val definition = SeaTunnelStyleConfigParser().parse(ConfigFactory.parseString(configText))
     val executableFlow = FlowAssembler(nodeFactoryRegistry()).assemble(definition)
     sparkRuntime().run(executableFlow)
 }
 
-fun SparkBootComponent.runKotlinJdbcToIcebergFlow(jdbcUrl: String) {
+fun SparkBootComponent.runKotlinJdbcToIcebergFlow() {
     val flow = sparkFlow("jdbc-to-iceberg-hms-kotlin", this) {
         jdbcSource("jdbc_orders") {
-            url = jdbcUrl
+            connection = "orders"
             table = "jdbc_orders"
-            user = DB_USER
-            password = DB_PASSWORD
-            driver = "com.mysql.cj.jdbc.Driver"
         }.writeIceberg("sink") {
-            table = "hms.spark_boot_demo.jdbc_orders_kotlin"
+            catalog = "hms"
+            table = "spark_boot_demo.jdbc_orders_kotlin"
             mode = SaveMode.Overwrite
         }
     }
@@ -119,7 +132,7 @@ fun SparkBootComponent.runKotlinJdbcToIcebergFlow(jdbcUrl: String) {
     sparkRuntime().run(flow)
 }
 
-fun jdbcToIcebergConfig(jdbcUrl: String): String =
+fun jdbcToIcebergConfig(): String =
     """
     env {
       job.name = "jdbc-to-iceberg-hms"
@@ -129,11 +142,8 @@ fun jdbcToIcebergConfig(jdbcUrl: String): String =
       {
         plugin_name = "Jdbc"
         plugin_output = "jdbc_orders"
-        url = "$jdbcUrl"
+        connection = "orders"
         table = "jdbc_orders"
-        user = "$DB_USER"
-        password = "$DB_PASSWORD"
-        driver = "com.mysql.cj.jdbc.Driver"
       }
     ]
 
@@ -141,7 +151,8 @@ fun jdbcToIcebergConfig(jdbcUrl: String): String =
       {
         plugin_name = "Iceberg"
         plugin_input = "jdbc_orders"
-        table = "hms.spark_boot_demo.jdbc_orders"
+        catalog = "hms"
+        table = "spark_boot_demo.jdbc_orders"
         save_mode = "overwrite"
       }
     ]

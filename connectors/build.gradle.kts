@@ -9,6 +9,7 @@ sparkPlatform {
 }
 
 dependencies {
+    api(project(":autoconfigure"))
     api(project(":core"))
     api(project(":runtime-spark"))
     implementation(libs.dagger)

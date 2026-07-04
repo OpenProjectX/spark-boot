@@ -423,6 +423,90 @@ fun main(args: Array<String>) = runSparkBoot(args, DaggerAppComponent.create()) 
 }
 ----
 
+=== Starter-Style Configuration
+
+Spark Boot has a small autoconfigure layer for shared infrastructure settings.
+It is intentionally similar to Spring Boot configuration: define infrastructure
+once in environment config, then refer to it by logical name from HOCON or the
+Kotlin DSL.
+
+Spark Boot reads `spark.boot` settings from Typesafe Config, so classpath
+`application.conf`, system properties, and environment-backed config sources can
+contribute values before the Dagger component creates the Spark session.
+
+[source,hocon]
+----
+spark.boot {
+  s3 {
+    endpoint = "http://localhost:4566"
+    region = "us-east-1"
+    access-key = "test"
+    secret-key = "test"
+    path-style-access = true
+    ssl-enabled = false
+  }
+
+  hms {
+    uri = "thrift://localhost:9083"
+    warehouse = "s3a://warehouse/iceberg"
+    catalog = "hms"
+  }
+
+  jdbc.connections.orders {
+    url = "jdbc:mysql://localhost:3306/orders"
+    user = "spark"
+    password = "spark"
+    driver = "com.mysql.cj.jdbc.Driver"
+  }
+}
+----
+
+The contract is:
+
+. `spark.boot.s3` configures Hadoop `s3a` before `SparkSession.getOrCreate()`.
+. `spark.boot.hms` enables Hive support and registers the named Iceberg catalog.
+. `spark.boot.jdbc.connections.<name>` creates a named JDBC connection.
+. A node may still provide explicit `url`, `user`, `password`, or `driver`; explicit node values override the named connection values.
+. Dynamic tests may set the same paths as system properties before creating the Dagger component, for example `spark.boot.jdbc.connections.orders.url`.
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+jdbcSource("orders") {
+    connection = "orders"
+    table = "jdbc_orders"
+}.writeIceberg("sink") {
+    catalog = "hms"
+    table = "default.jdbc_orders"
+    mode = SaveMode.Overwrite
+}
+----
+
+HOCON flow:
+
+[source,hocon]
+----
+source = [
+  {
+    plugin_name = "Jdbc"
+    plugin_output = "orders"
+    connection = "orders"
+    table = "jdbc_orders"
+  }
+]
+
+sink = [
+  {
+    plugin_name = "Iceberg"
+    plugin_input = "orders"
+    catalog = "hms"
+    table = "default.jdbc_orders"
+    save_mode = "overwrite"
+  }
+]
+----
+
 === Explicit Edges
 
 For branching or non-linear flows, assign node references and connect them explicitly.
@@ -661,25 +745,27 @@ HOCON type: `JdbcSource`
 
 Required config:
 
-* `url`
 * `table`
-* `user`
-* `password`
 
 Optional config:
 
+* `connection`
+* `url`
+* `user`
+* `password`
 * `driver`
+
+If `connection` is set, Spark Boot resolves `url`, `user`, `password`, and
+`driver` from `spark.boot.jdbc.connections.<connection>`.
+Explicit node values override values from the named connection.
 
 Kotlin DSL:
 
 [source,kotlin]
 ----
 jdbcSource("orders") {
-    url = "jdbc:mariadb://localhost:3306/orders"
+    connection = "orders"
     table = "orders"
-    user = "spark"
-    password = "spark"
-    driver = "org.mariadb.jdbc.Driver"
 }
 ----
 
@@ -693,6 +779,7 @@ Required config:
 
 Optional config:
 
+* `catalog`
 * `save_mode` or `mode`
 
 Supported save modes:
@@ -785,12 +872,17 @@ Kotlin DSL:
 [source,kotlin]
 ----
 writeIceberg("iceberg-sink") {
-    table = "hms.default.paid_orders"
+    catalog = "hms"
+    table = "default.paid_orders"
     mode = SaveMode.Overwrite
 }
 ----
 
-For HMS-backed Iceberg, configure Spark Boot before the Spark session is created:
+If `catalog` is set and `table` is not already prefixed with that catalog,
+Spark Boot writes to `<catalog>.<table>`.
+
+For HMS-backed Iceberg, prefer `spark.boot.hms` config before the Spark session
+is created. The legacy compatibility settings still work:
 
 * `hive.metastore.uris` system property or `HIVE_METASTORE_URIS` environment variable
 * `spark.boot.iceberg.warehouse` system property or `SPARK_BOOT_ICEBERG_WAREHOUSE` environment variable
@@ -804,14 +896,19 @@ HOCON type: `JdbcSink`
 
 Required config:
 
-* `url`
 * `table`
-* `user`
-* `password`
 
 Optional config:
 
+* `connection`
+* `url`
+* `user`
+* `password`
 * `save_mode` or `mode`
+
+If `connection` is set, Spark Boot resolves `url`, `user`, and `password`
+from `spark.boot.jdbc.connections.<connection>`.
+Explicit node values override values from the named connection.
 
 == Runtime Validation
 
