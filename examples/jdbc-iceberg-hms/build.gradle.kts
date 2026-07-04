@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "2.2.21"
     id("org.openprojectx.spark.platform") version "0.1.41"
-    id("org.openprojectx.bigdata-test") version "0.1.34"
+    id("org.openprojectx.bigdata-test") version "0.1.36"
 }
 
 kotlin {
