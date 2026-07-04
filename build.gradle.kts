@@ -48,7 +48,7 @@ subprojects {
                         pom {
                             // Module-specific name/description; override per-module if you want
                             name.set(project.name)
-                            description.set("SPARK-BOOT Spring Boot starter")
+                            description.set("SparkBoot")
                             url.set("https://github.com/OpenProjectX/spark-boot")
 
                             licenses {
