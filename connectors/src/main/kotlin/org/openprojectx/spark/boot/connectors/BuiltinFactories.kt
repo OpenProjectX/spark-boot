@@ -14,6 +14,14 @@ class ParquetSinkNodeFactory @Inject constructor() : NodeFactory<ParquetSinkNode
     override fun create(): ParquetSinkNode = ParquetSinkNode()
 }
 
+class JdbcSourceNodeFactory @Inject constructor() : NodeFactory<JdbcSourceNode> {
+    override fun create(): JdbcSourceNode = JdbcSourceNode()
+}
+
+class IcebergSinkNodeFactory @Inject constructor() : NodeFactory<IcebergSinkNode> {
+    override fun create(): IcebergSinkNode = IcebergSinkNode()
+}
+
 class SqlFilterNodeFactory @Inject constructor() : NodeFactory<SqlFilterNode> {
     override fun create(): SqlFilterNode = SqlFilterNode()
 }
@@ -42,6 +50,27 @@ class ParquetSinkConfigFactory @Inject constructor() : ConfigNodeFactory {
     override fun create(config: Map<String, Any?>): FlowNode<*, *> {
         return ParquetSinkNode().apply {
             path = requiredString(config, "path")
+            mode = saveMode(config["save_mode"] ?: config["mode"])
+        }
+    }
+}
+
+class JdbcSourceConfigFactory @Inject constructor() : ConfigNodeFactory {
+    override fun create(config: Map<String, Any?>): FlowNode<*, *> {
+        return JdbcSourceNode().apply {
+            url = requiredString(config, "url")
+            table = requiredString(config, "table")
+            user = requiredString(config, "user")
+            password = requiredString(config, "password")
+            driver = optionalString(config, "driver")
+        }
+    }
+}
+
+class IcebergSinkConfigFactory @Inject constructor() : ConfigNodeFactory {
+    override fun create(config: Map<String, Any?>): FlowNode<*, *> {
+        return IcebergSinkNode().apply {
+            table = requiredString(config, "table")
             mode = saveMode(config["save_mode"] ?: config["mode"])
         }
     }
@@ -87,6 +116,10 @@ class JdbcSinkConfigFactory @Inject constructor() : ConfigNodeFactory {
 
 private fun requiredString(config: Map<String, Any?>, key: String): String {
     return config[key]?.toString() ?: error("Missing required config key: $key")
+}
+
+private fun optionalString(config: Map<String, Any?>, key: String): String? {
+    return config[key]?.toString()?.takeIf(String::isNotBlank)
 }
 
 private fun requiredStringList(config: Map<String, Any?>, key: String): List<String> {

@@ -32,6 +32,66 @@ class ParquetSinkNode : SparkSinkNode<Dataset<Row>> {
     }
 }
 
+class JdbcSourceNode : SparkSourceNode<Dataset<Row>> {
+    lateinit var url: String
+    lateinit var table: String
+    lateinit var user: String
+    lateinit var password: String
+    var driver: String? = null
+
+    override val name: String = "jdbc-source"
+
+    override fun execute(input: Unit, context: SparkExecutionContext): Dataset<Row> {
+        val reader = context.spark.read()
+            .format("jdbc")
+            .option("url", url)
+            .option("dbtable", table)
+            .option("user", user)
+            .option("password", password)
+        driver?.let { reader.option("driver", it) }
+        return reader.load()
+    }
+}
+
+class IcebergSinkNode : SparkSinkNode<Dataset<Row>> {
+    lateinit var table: String
+    var mode: SaveMode = SaveMode.ErrorIfExists
+
+    override val name: String = "iceberg-sink"
+
+    override fun execute(input: Dataset<Row>, context: SparkExecutionContext) {
+        val output = input.localCheckpoint(true)
+        when (mode) {
+            SaveMode.Overwrite -> {
+                context.spark.sql("DROP TABLE IF EXISTS $table")
+                createTable(output, context)
+                output.writeTo(table).append()
+            }
+            SaveMode.Append -> output.writeTo(table).append()
+            SaveMode.Ignore -> if (!tableExists(context)) {
+                createTable(output, context)
+                output.writeTo(table).append()
+            }
+            SaveMode.ErrorIfExists -> {
+                check(!tableExists(context)) { "Iceberg table already exists: $table" }
+                createTable(output, context)
+                output.writeTo(table).append()
+            }
+        }
+    }
+
+    private fun createTable(input: Dataset<Row>, context: SparkExecutionContext) {
+        context.spark.sql("CREATE TABLE $table (${input.schema().toDDL()}) USING iceberg")
+    }
+
+    private fun tableExists(context: SparkExecutionContext): Boolean {
+        return runCatching {
+            context.spark.table(table).queryExecution().analyzed()
+            true
+        }.getOrDefault(false)
+    }
+}
+
 class SqlFilterNode : SparkTransformNode<Dataset<Row>, Dataset<Row>> {
     lateinit var condition: String
 

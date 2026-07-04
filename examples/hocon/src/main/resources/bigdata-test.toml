@@ -1,10 +1,27 @@
 [services]
 localStackS3 = true
+hiveMetastore = true
+
+[images]
+hiveMetastore = "ghcr.io/openprojectx/hive:3.1.3-hadoop-3.4.2-gcs-4.0.4-jdk17-0.1.5"
+hiveMetastoreMysql = "mysql:8.0.44-bookworm"
+
+[hiveMetastore]
+databaseType = "mysql"
+databaseName = "metastore"
+databaseUser = "hive"
+databasePassword = "hive"
+databaseHostPort = 0
+localHiveSitePath = "build/bigdata-test/hive/hive-site.xml"
+localMetastoreSitePath = "build/bigdata-test/hive/metastore-site.xml"
 
 [containerLogs]
 mode = "STDOUT"
 directory = "build/container-logs"
 append = false
+
+[containerLogLevels]
+hiveMetastore = "INFO"
 
 [containers.localstackS3.env]
 DISABLE_CORS_CHECKS = "1"

@@ -10,6 +10,10 @@ import javax.inject.Singleton
 import org.apache.spark.sql.SparkSession
 import org.openprojectx.spark.boot.connectors.JdbcSinkConfigFactory
 import org.openprojectx.spark.boot.connectors.JdbcSinkNodeFactory
+import org.openprojectx.spark.boot.connectors.JdbcSourceConfigFactory
+import org.openprojectx.spark.boot.connectors.JdbcSourceNodeFactory
+import org.openprojectx.spark.boot.connectors.IcebergSinkConfigFactory
+import org.openprojectx.spark.boot.connectors.IcebergSinkNodeFactory
 import org.openprojectx.spark.boot.connectors.ParquetSinkConfigFactory
 import org.openprojectx.spark.boot.connectors.ParquetSinkNodeFactory
 import org.openprojectx.spark.boot.connectors.ParquetSourceConfigFactory
@@ -41,6 +45,8 @@ interface SparkBootComponent {
 
     fun parquetSourceNodeFactory(): ParquetSourceNodeFactory
     fun parquetSinkNodeFactory(): ParquetSinkNodeFactory
+    fun jdbcSourceNodeFactory(): JdbcSourceNodeFactory
+    fun icebergSinkNodeFactory(): IcebergSinkNodeFactory
     fun sqlFilterNodeFactory(): SqlFilterNodeFactory
     fun selectNodeFactory(): SelectNodeFactory
     fun sqlTransformNodeFactory(): SqlTransformNodeFactory
@@ -56,8 +62,11 @@ object SparkModule {
             .appName("spark-boot")
             .master("local[*]")
             .config("spark.ui.enabled", "false")
+            .config("spark.sql.planChangeValidation", "false")
+            .config("spark.sql.lightweightPlanChangeValidation", "false")
 
         configureLocalStackS3(builder)
+        configureHiveMetastore(builder)
 
         return builder.getOrCreate()
     }
@@ -88,6 +97,45 @@ object SparkModule {
         accessKey?.let { builder.config("spark.hadoop.fs.s3a.access.key", it) }
         secretKey?.let { builder.config("spark.hadoop.fs.s3a.secret.key", it) }
         builder.config("spark.hadoop.fs.s3a.endpoint.region", region)
+    }
+
+    private fun configureHiveMetastore(builder: SparkSession.Builder) {
+        val metastoreUris = System.getProperty("hive.metastore.uris")
+            ?: System.getenv("HIVE_METASTORE_URIS")
+            ?: return
+        val warehouse = System.getProperty("spark.boot.iceberg.warehouse")
+            ?: System.getenv("SPARK_BOOT_ICEBERG_WAREHOUSE")
+            ?: "file:/tmp/spark-boot-iceberg-warehouse"
+
+        builder
+            .enableHiveSupport()
+            .config("hive.metastore.uris", metastoreUris)
+            .config(
+                "spark.driver.extraJavaOptions",
+                "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED",
+            )
+            .config(
+                "spark.executor.extraJavaOptions",
+                "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED",
+            )
+            .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+            .config("spark.sql.catalog.hms", "org.apache.iceberg.spark.SparkCatalog")
+            .config("spark.sql.catalog.hms.type", "hive")
+            .config("spark.sql.catalog.hms.uri", metastoreUris)
+            .config("spark.sql.catalog.hms.warehouse", warehouse)
+
+        listOf(
+            "hive.metastore.use.SSL",
+            "hive.metastore.truststore.path",
+            "hive.metastore.truststore.password",
+            "hive.metastore.sasl.enabled",
+            "hive.metastore.kerberos.principal"
+        ).forEach { key ->
+            System.getProperty(key)?.let { value ->
+                builder.config(key, value)
+                builder.config("spark.hadoop.$key", value)
+            }
+        }
     }
 
     @Provides
@@ -125,6 +173,16 @@ interface BuiltinConnectorModule {
     @IntoMap
     @StringKey("ParquetSink")
     fun bindParquetSinkFactory(factory: ParquetSinkConfigFactory): ConfigNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("JdbcSource")
+    fun bindJdbcSourceFactory(factory: JdbcSourceConfigFactory): ConfigNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("IcebergSink")
+    fun bindIcebergSinkFactory(factory: IcebergSinkConfigFactory): ConfigNodeFactory
 
     @Binds
     @IntoMap
