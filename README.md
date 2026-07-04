@@ -77,7 +77,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configu
 ```
 
 The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.
-The Kotlin DSL and HOCON examples are self-contained: they create temporary Parquet input, run the flow, print the paid orders, and stop Spark.
+The Kotlin DSL example creates temporary Parquet input in code. The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`.
 
 ## CLI
 
@@ -100,7 +100,7 @@ env {
 source = [
   {
     plugin_name = "Parquet"
-    path = "data/orders"
+    path = "s3a://spark-boot-hocon-example/input/orders"
     plugin_output = "orders"
   }
 ]
@@ -118,7 +118,7 @@ sink = [
   {
     plugin_name = "Parquet"
     plugin_input = "paid_orders"
-    path = "output/paid-orders"
+    path = "s3a://spark-boot-hocon-example/output/paid-orders"
     save_mode = "overwrite"
   }
 ]

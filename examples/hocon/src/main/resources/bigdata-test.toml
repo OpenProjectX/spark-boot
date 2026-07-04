@@ -1,0 +1,10 @@
+[services]
+localStackS3 = true
+
+[containerLogs]
+mode = "STDOUT"
+directory = "build/container-logs"
+append = false
+
+[containers.localstackS3.env]
+DISABLE_CORS_CHECKS = "1"

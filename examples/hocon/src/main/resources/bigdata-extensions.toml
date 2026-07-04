@@ -1,0 +1,14 @@
+[[s3Buckets]]
+id = "spark-boot-hocon-bucket"
+bucket = "spark-boot-hocon-example"
+
+[[extensions]]
+type = "spark-sql-prep"
+id = "prepare-paid-orders"
+appName = "spark-boot-hocon-example-prep"
+enableHiveSupport = false
+statements = [
+    "DROP TABLE IF EXISTS orders_seed",
+    "CREATE TABLE orders_seed (id STRING, amount DOUBLE, status STRING) USING parquet LOCATION 's3a://spark-boot-hocon-example/input/orders'",
+    "INSERT OVERWRITE TABLE orders_seed VALUES ('1', 10.0D, 'PAID'), ('2', 20.0D, 'CANCELLED')",
+]

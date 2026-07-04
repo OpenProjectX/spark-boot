@@ -27,9 +27,9 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configu
 
 The `:kotlin-dsl` example is self-contained. It creates temporary Parquet input,
 runs the flow, prints the paid orders, and stops Spark.
-The `:hocon` example is also self-contained. It creates temporary Parquet input,
-materializes the sample `paid-orders.conf`, runs the Spark Boot CLI, prints the
-paid orders, and stops Spark.
+The `:hocon` example is config-only. The `org.openprojectx.bigdata-test`
+Gradle plugin starts LocalStack S3 and prepares the input Parquet data from
+TOML config, then Gradle runs the Spark Boot CLI with `paid-orders.conf`.
 
 ## Adding More Examples
 

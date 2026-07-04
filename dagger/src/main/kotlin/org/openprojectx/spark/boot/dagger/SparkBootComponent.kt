@@ -52,11 +52,42 @@ object SparkModule {
     @Provides
     @Singleton
     fun provideSparkSession(): SparkSession {
-        return SparkSession.builder()
+        val builder = SparkSession.builder()
             .appName("spark-boot")
             .master("local[*]")
             .config("spark.ui.enabled", "false")
-            .getOrCreate()
+
+        configureLocalStackS3(builder)
+
+        return builder.getOrCreate()
+    }
+
+    private fun configureLocalStackS3(builder: SparkSession.Builder) {
+        val endpoint = System.getProperty("aws.endpoint-url.s3")
+            ?: System.getenv("AWS_ENDPOINT_URL_S3")
+            ?: return
+
+        builder
+            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+            .config("spark.hadoop.fs.s3a.endpoint", endpoint)
+            .config("spark.hadoop.fs.s3a.path.style.access", "true")
+            .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
+            .config(
+                "spark.hadoop.fs.s3a.aws.credentials.provider",
+                "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+            )
+
+        val accessKey = System.getProperty("aws.accessKeyId")
+            ?: System.getenv("AWS_ACCESS_KEY_ID")
+        val secretKey = System.getProperty("aws.secretAccessKey")
+            ?: System.getenv("AWS_SECRET_ACCESS_KEY")
+        val region = System.getProperty("aws.region")
+            ?: System.getenv("AWS_REGION")
+            ?: "us-east-1"
+
+        accessKey?.let { builder.config("spark.hadoop.fs.s3a.access.key", it) }
+        secretKey?.let { builder.config("spark.hadoop.fs.s3a.secret.key", it) }
+        builder.config("spark.hadoop.fs.s3a.endpoint.region", region)
     }
 
     @Provides
