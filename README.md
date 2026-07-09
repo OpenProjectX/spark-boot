@@ -8,6 +8,7 @@ It provides:
 - a SeaTunnel-style HOCON DSL for deployment/runtime configuration
 - Dagger-based compile-time construction and factory registration
 - a portable Flow / Node / Edge model
+- a versioned JSON-friendly FlowDocument IR for tools and UI builders
 - a Spark 4 runtime backed by `org.openprojectx.spark.platform`
 - built-in Parquet, JDBC source/sink, SQL filter/select/transform, and Iceberg sink nodes
 
@@ -31,6 +32,32 @@ not full Apache SeaTunnel runtime compatibility.
 | `dsl-hocon` | SeaTunnel-style HOCON parser. |
 | `cli` | HOCON file runner for users who want to provide only config. |
 | `integration-tests` | Local Spark integration tests. |
+
+## Flow IR
+
+`FlowDefinition` is the runtime graph model. UI tools should wrap it in
+`FlowDocument`, which adds a schema version and UI-only layout metadata:
+
+```json
+{
+  "schemaVersion": "spark-boot.flow/v1",
+  "flow": {
+    "name": "paid-orders",
+    "nodes": [
+      { "id": "orders", "type": "ParquetSource", "config": { "path": "s3a://warehouse/orders" } }
+    ],
+    "edges": []
+  },
+  "ui": {
+    "nodes": {
+      "orders": { "x": 80, "y": 160 }
+    }
+  }
+}
+```
+
+Built-in node descriptors and structured validation diagnostics are exposed from
+the library so external graph builders do not need to hardcode node fields.
 
 ## Quick Start
 

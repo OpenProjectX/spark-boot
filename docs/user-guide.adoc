@@ -60,6 +60,59 @@ This is the most important rule to understand before using the Kotlin DSL.
 | Validates the assembled DAG and executes nodes in topological order.
 |===
 
+=== Flow IR
+
+`FlowDefinition` is Spark Boot's runtime-independent graph model.
+It is intentionally small:
+
+* `name`
+* `nodes`
+* `edges`
+* `config`
+
+Tools should use `FlowDocument` as the serialized IR boundary.
+`FlowDocument` wraps `FlowDefinition` with:
+
+* `schemaVersion`, currently `spark-boot.flow/v1`
+* `ui`, for layout and editor-only metadata
+
+[source,json]
+----
+{
+  "schemaVersion": "spark-boot.flow/v1",
+  "flow": {
+    "name": "paid-orders",
+    "nodes": [
+      {
+        "id": "orders",
+        "type": "ParquetSource",
+        "config": {
+          "path": "s3a://warehouse/orders"
+        }
+      }
+    ],
+    "edges": []
+  },
+  "ui": {
+    "nodes": {
+      "orders": {
+        "x": 80,
+        "y": 160
+      }
+    }
+  }
+}
+----
+
+`FlowDocument` is the recommended JSON format for UI builders and other tools.
+HOCON remains the user-facing deployment/config DSL, and the Kotlin DSL remains
+the developer-facing programmatic API.
+
+Node descriptors describe available node types, roles, field schemas, defaults,
+and enum options.
+Validation should use `FlowDefinitionValidator` before a graph is assembled or
+executed, so tools can show structured diagnostics without starting Spark.
+
 === Kotlin DSL Semantics
 
 A Kotlin DSL source call has this shape:
