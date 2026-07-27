@@ -102,7 +102,8 @@ enum class NodeRole(
 ) {
     SOURCE(minInputs = 0, maxInputs = 0, minOutputs = 1, maxOutputs = null),
     TRANSFORM(minInputs = 1, maxInputs = 1, minOutputs = 1, maxOutputs = null),
-    SINK(minInputs = 1, maxInputs = 1, minOutputs = 0, maxOutputs = 0)
+    SINK(minInputs = 1, maxInputs = 1, minOutputs = 0, maxOutputs = 0),
+    ACTION(minInputs = 0, maxInputs = Int.MAX_VALUE, minOutputs = 0, maxOutputs = null)
 }
 
 data class ConfigFieldDescriptor(
@@ -297,14 +298,33 @@ class FlowDefinitionValidator(
     }
 
     private fun validatePorts(flow: FlowDefinition): List<FlowValidationDiagnostic> {
+        val nodeById = flow.nodes.associateBy(NodeDefinition::id)
+        val descriptorByNodeId = nodeById.mapValues { (_, node) -> descriptorsByType[node.type] }
         val incoming = flow.edges.groupBy(EdgeDefinition::to)
-        val outgoing = flow.edges.groupBy(EdgeDefinition::from)
+        val dataOutgoing = flow.edges
+            .filterNot { edge -> descriptorByNodeId[edge.to]?.role == NodeRole.ACTION }
+            .groupBy(EdgeDefinition::from)
 
-        return flow.nodes.flatMap { node ->
+        val actionToDataDiagnostics = flow.edges.mapNotNull { edge ->
+            val sourceDescriptor = descriptorByNodeId[edge.from] ?: return@mapNotNull null
+            val targetDescriptor = descriptorByNodeId[edge.to] ?: return@mapNotNull null
+            if (sourceDescriptor.role == NodeRole.ACTION && targetDescriptor.role != NodeRole.ACTION) {
+                FlowValidationDiagnostic(
+                    severity = FlowValidationSeverity.ERROR,
+                    code = "action_edge_to_data_node",
+                    message = "Action node '${edge.from}' cannot provide data input to '${edge.to}'",
+                    nodeId = edge.from
+                )
+            } else {
+                null
+            }
+        }
+
+        return actionToDataDiagnostics + flow.nodes.flatMap { node ->
             val descriptor = descriptorsByType[node.type] ?: return@flatMap emptyList()
             val diagnostics = mutableListOf<FlowValidationDiagnostic>()
             val inputCount = incoming[node.id].orEmpty().size
-            val outputCount = outgoing[node.id].orEmpty().size
+            val outputCount = dataOutgoing[node.id].orEmpty().size
 
             if (inputCount < descriptor.minInputs || inputCount > descriptor.maxInputs) {
                 diagnostics += FlowValidationDiagnostic(

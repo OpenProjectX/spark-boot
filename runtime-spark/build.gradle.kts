@@ -13,4 +13,6 @@ dependencies {
 
     compileOnly("org.apache.spark:spark-sql_2.13")
     testImplementation("org.apache.spark:spark-sql_2.13")
+    testImplementation(libs.junitJupiter)
+    testRuntimeOnly(libs.junitPlatformLauncher)
 }

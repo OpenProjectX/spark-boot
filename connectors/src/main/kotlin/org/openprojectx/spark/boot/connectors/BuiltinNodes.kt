@@ -7,9 +7,11 @@ import org.apache.spark.sql.functions
 import org.openprojectx.spark.boot.autoconfigure.IcebergCatalogRegistry
 import org.openprojectx.spark.boot.autoconfigure.JdbcConnectionRegistry
 import org.openprojectx.spark.boot.runtime.spark.SparkExecutionContext
+import org.openprojectx.spark.boot.runtime.spark.SparkActionNode
 import org.openprojectx.spark.boot.runtime.spark.SparkSinkNode
 import org.openprojectx.spark.boot.runtime.spark.SparkSourceNode
 import org.openprojectx.spark.boot.runtime.spark.SparkTransformNode
+import org.slf4j.LoggerFactory
 
 class ParquetSourceNode : SparkSourceNode<Dataset<Row>> {
     lateinit var path: String
@@ -306,5 +308,21 @@ class JdbcSinkNode(
             .option("user", jdbcUser)
             .option("password", jdbcPassword)
             .save()
+    }
+}
+
+class SqlActionNode : SparkActionNode {
+    lateinit var sql: String
+    var label: String? = null
+
+    override val name: String = "sql-action"
+
+    override fun execute(input: Unit, context: SparkExecutionContext) {
+        val rowCount = context.spark.sql(sql).collectAsList().size
+        logger.info("Executed SQL action{}; returned {} rows", label?.let { " '$it'" } ?: "", rowCount)
+    }
+
+    private companion object {
+        private val logger = LoggerFactory.getLogger(SqlActionNode::class.java)
     }
 }

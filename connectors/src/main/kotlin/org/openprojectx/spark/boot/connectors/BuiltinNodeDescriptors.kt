@@ -347,6 +347,28 @@ object BuiltinNodeDescriptors {
                 ),
                 saveModeField(defaultValue = "errorifexists")
             )
+        ),
+        NodeDescriptor(
+            type = "SqlAction",
+            label = "SQL Action",
+            role = NodeRole.ACTION,
+            category = "Action",
+            description = "Runs a Spark SQL statement on the driver for its side effect.",
+            config = listOf(
+                ConfigFieldDescriptor(
+                    key = "sql",
+                    label = "SQL",
+                    type = ConfigFieldType.STRING,
+                    required = true,
+                    description = "Single Spark SQL statement to execute."
+                ),
+                ConfigFieldDescriptor(
+                    key = "label",
+                    label = "Label",
+                    type = ConfigFieldType.STRING,
+                    description = "Optional label used only in logs."
+                )
+            )
         )
     )
 

@@ -378,11 +378,12 @@ The `runtime-spark` module contains Spark-specific execution contracts:
 * `SparkSourceNode`
 * `SparkTransformNode`
 * `SparkSinkNode`
+* `SparkActionNode`
 * `SparkRuntime`
 
 `SparkRuntime` validates and executes a DAG.
-The first implementation supports one input per transform or sink.
-Nodes with multiple incoming edges fail with a clear error.
+Data nodes support one input per transform or sink.
+Action nodes may have multiple incoming control edges.
 
 === connectors
 
@@ -395,6 +396,7 @@ The `connectors` module provides built-in nodes:
 * `SqlFilterNode`
 * `SelectNode`
 * `SqlTransformNode`
+* `SqlActionNode`
 * `IcebergSinkNode`
 * `HudiSourceNode`
 * `HudiSinkNode`
@@ -846,6 +848,7 @@ Supported top-level blocks:
 * `source`
 * `transform`
 * `sink`
+* `action`
 
 === Canonical Array Style
 
@@ -882,6 +885,14 @@ sink = [
     save_mode = "overwrite"
   }
 ]
+
+action = [
+  {
+    plugin_name = "Sql"
+    plugin_input = "sink_paid_orders_0"
+    sql = "CREATE OR REPLACE TEMP VIEW paid_orders_ready AS SELECT 1"
+  }
+]
 ----
 
 === Object Style
@@ -913,6 +924,13 @@ sink {
     plugin_input = "paid_orders"
     path = "output/paid-orders"
     save_mode = "overwrite"
+  }
+}
+
+action {
+  Sql {
+    plugin_input = "sink_paid_orders_0"
+    sql = "CREATE OR REPLACE TEMP VIEW paid_orders_ready AS SELECT 1"
   }
 }
 ----
@@ -956,6 +974,23 @@ node type = <plugin_name>Sink
 edge = plugin_input -> sink node id
 node config = item config
 ----
+
+Action item:
+
+[source,text]
+----
+node id = plugin_output, or action_<plugin_name>_<index> when plugin_output is absent
+node type = <plugin_name>Action
+edge = each plugin_input value -> action node id
+node config = item config
+----
+
+`plugin_input` is optional for actions.
+When present, it can be a single id or a list of ids.
+Action inputs are control dependencies only; they order execution and do not
+pass a DataFrame.
+In v1, depending on a sink requires the generated sink id
+`sink_<plugin_input>_<index>`, for example `sink_paid_orders_0`.
 
 === Running HOCON
 
@@ -1240,6 +1275,86 @@ paidOrders.writeHudi("hudi-sink") {
 }
 ----
 
+=== SqlAction
+
+HOCON type: `SqlAction`
+
+Required config:
+
+* `sql`
+
+Optional config:
+
+* `label`
+
+`SqlAction` runs one Spark SQL statement on the driver for its side effect.
+Spark Boot calls `collectAsList()` on the returned DataFrame so lazy statements
+and catalog procedure calls are forced before downstream nodes are considered
+complete. Returned rows are discarded.
+
+Standalone Kotlin DSL:
+
+[source,kotlin]
+----
+sqlAction("init") {
+    sql = "CREATE DATABASE IF NOT EXISTS mart"
+}
+----
+
+Chained after any node, including a sink:
+
+[source,kotlin]
+----
+parquetSource("orders") {
+    path = "data/orders"
+}.writeParquet("sink") {
+    path = "output/orders"
+    mode = SaveMode.Overwrite
+}.thenSqlAction("repair") {
+    sql = "MSCK REPAIR TABLE mart.orders"
+}
+----
+
+HOCON action-only job:
+
+[source,hocon]
+----
+env { job.name = "expire-only" }
+
+action {
+  Sql {
+    sql = "CALL cat.system.expire_snapshots(table => 'db.orders')"
+  }
+}
+----
+
+HOCON action after a sink:
+
+[source,hocon]
+----
+source {
+  Parquet {
+    path = "data/orders"
+    plugin_output = "orders"
+  }
+}
+
+sink {
+  Parquet {
+    plugin_input = "orders"
+    path = "output/orders"
+    save_mode = "overwrite"
+  }
+}
+
+action {
+  Sql {
+    plugin_input = "sink_orders_0"
+    sql = "CREATE OR REPLACE TEMP VIEW orders_ready AS SELECT 1"
+  }
+}
+----
+
 === JdbcSink
 
 HOCON type: `JdbcSink`
@@ -1268,9 +1383,9 @@ Validation checks:
 
 * the flow has at least one node
 * all edge endpoints exist
-* the graph has at least one source and one sink
+* the graph has at least one entry node and one terminal node by DAG degree
 * the graph has no cycles
-* each node has at most one input
+* each data node has at most one input
 * topological ordering is possible
 
 Input handling:
@@ -1278,7 +1393,8 @@ Input handling:
 * source nodes receive `Unit`
 * transform nodes receive the upstream node output
 * sink nodes receive the upstream node output
-* multi-input nodes fail in this version
+* action nodes receive `Unit`
+* action incoming edges are control dependencies and may be multi-input
 
 == Extending Spark Boot
 
@@ -1296,6 +1412,21 @@ class MyTransformNode : SparkTransformNode<Dataset<Row>, Dataset<Row>> {
         context: SparkExecutionContext
     ): Dataset<Row> {
         return input
+    }
+}
+----
+
+For a driver-side action, implement `SparkActionNode` instead:
+
+[source,kotlin]
+----
+class MyMaintenanceActionNode : SparkActionNode {
+    lateinit var table: String
+
+    override val name: String = "my-maintenance-action"
+
+    override fun execute(input: Unit, context: SparkExecutionContext) {
+        context.spark.sql("ANALYZE TABLE $table COMPUTE STATISTICS").collectAsList()
     }
 }
 ----
@@ -1367,6 +1498,24 @@ transform = [
 ----
 
 The parser maps that to type `MyTransform`.
+
+Custom actions use the same registry.
+Bind a `ConfigNodeFactory` under an action type such as `MyMaintenanceAction`,
+return a `SparkActionNode`, and use the HOCON `action` block:
+
+[source,hocon]
+----
+action {
+  MyMaintenance {
+    plugin_input = ["sink_paid_0", "sink_cancelled_1"]
+    table = "mart.orders"
+  }
+}
+----
+
+The parser maps that to type `MyMaintenanceAction`.
+The `plugin_input` values are optional control dependencies; no DataFrame is
+passed to the action.
 
 == Build And Test
 

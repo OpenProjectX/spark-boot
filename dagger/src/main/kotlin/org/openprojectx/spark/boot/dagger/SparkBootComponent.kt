@@ -36,6 +36,8 @@ import org.openprojectx.spark.boot.connectors.SelectConfigFactory
 import org.openprojectx.spark.boot.connectors.SelectNodeFactory
 import org.openprojectx.spark.boot.connectors.SqlFilterConfigFactory
 import org.openprojectx.spark.boot.connectors.SqlFilterNodeFactory
+import org.openprojectx.spark.boot.connectors.SqlActionConfigFactory
+import org.openprojectx.spark.boot.connectors.SqlActionNodeFactory
 import org.openprojectx.spark.boot.connectors.SqlTransformConfigFactory
 import org.openprojectx.spark.boot.connectors.SqlTransformNodeFactory
 import org.openprojectx.spark.boot.core.ConfigNodeFactory
@@ -72,6 +74,7 @@ interface SparkBootComponent {
     fun sqlFilterNodeFactory(): SqlFilterNodeFactory
     fun selectNodeFactory(): SelectNodeFactory
     fun sqlTransformNodeFactory(): SqlTransformNodeFactory
+    fun sqlActionNodeFactory(): SqlActionNodeFactory
     fun jdbcSinkNodeFactory(): JdbcSinkNodeFactory
 }
 
@@ -313,6 +316,11 @@ interface BuiltinConnectorModule {
 
     @Binds
     @IntoMap
+    @StringKey("SqlAction")
+    fun bindProgrammaticSqlActionFactory(factory: SqlActionNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
     @StringKey("ParquetSource")
     fun bindParquetSourceFactory(factory: ParquetSourceConfigFactory): ConfigNodeFactory
 
@@ -365,4 +373,9 @@ interface BuiltinConnectorModule {
     @IntoMap
     @StringKey("JdbcSink")
     fun bindJdbcSinkFactory(factory: JdbcSinkConfigFactory): ConfigNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("SqlAction")
+    fun bindSqlActionFactory(factory: SqlActionConfigFactory): ConfigNodeFactory
 }

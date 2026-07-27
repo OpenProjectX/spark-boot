@@ -10,6 +10,7 @@ import org.openprojectx.spark.boot.connectors.KafkaSourceNode
 import org.openprojectx.spark.boot.connectors.ParquetSinkNode
 import org.openprojectx.spark.boot.connectors.ParquetSourceNode
 import org.openprojectx.spark.boot.connectors.SelectNode
+import org.openprojectx.spark.boot.connectors.SqlActionNode
 import org.openprojectx.spark.boot.connectors.SqlFilterNode
 import org.openprojectx.spark.boot.core.EdgeDefinition
 import org.openprojectx.spark.boot.core.ExecutableFlow
@@ -105,6 +106,12 @@ class SparkFlowBuilder(
         return register(id, node)
     }
 
+    fun sqlAction(id: String, customize: SqlActionNode.() -> Unit): NodeRef<SqlActionNode> {
+        val node = component.sqlActionNodeFactory().create()
+        node.customize()
+        return register(id, node)
+    }
+
     fun select(id: String, customize: SelectNode.() -> Unit): NodeRef<SelectNode> {
         val node = component.selectNodeFactory().create()
         node.customize()
@@ -173,6 +180,12 @@ fun NodeRef<*>.writeHudi(id: String, customize: HudiSinkNode.() -> Unit): NodeRe
 
 fun NodeRef<*>.writeIceberg(id: String, customize: IcebergSinkNode.() -> Unit): NodeRef<IcebergSinkNode> {
     val next = sparkBuilder().icebergSink(id, customize)
+    then(next)
+    return next
+}
+
+fun NodeRef<*>.thenSqlAction(id: String, customize: SqlActionNode.() -> Unit): NodeRef<SqlActionNode> {
+    val next = sparkBuilder().sqlAction(id, customize)
     then(next)
     return next
 }

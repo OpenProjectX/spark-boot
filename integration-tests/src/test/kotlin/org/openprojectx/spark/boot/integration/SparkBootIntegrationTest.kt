@@ -105,6 +105,83 @@ class SparkBootIntegrationTest {
         assertEquals("1", rows.single().getAs<String>("id"))
     }
 
+    @Test
+    fun `runs HOCON flow with SqlAction after sink`() {
+        val input = Files.createTempDirectory("spark-boot-action-input")
+        val output = Files.createTempDirectory("spark-boot-action-output")
+        Files.delete(output)
+        val actionTable = "spark_boot_action_${System.nanoTime()}"
+
+        component.sparkSession().createDataFrame(
+            listOf(Order("1", 10.0, "PAID"), Order("2", 20.0, "CANCELLED")),
+            Order::class.java
+        ).write().mode(SaveMode.Overwrite).parquet(input.toString())
+
+        val config = ConfigFactory.parseString(
+            """
+            env { job.name = "paid-orders-with-action" }
+
+            source {
+              Parquet {
+                path = "$input"
+                plugin_output = "orders"
+              }
+            }
+
+            sink {
+              Parquet {
+                plugin_input = "orders"
+                path = "$output"
+                save_mode = "overwrite"
+              }
+            }
+
+            action {
+              Sql {
+                plugin_input = "sink_orders_0"
+                sql = "CREATE TABLE $actionTable USING parquet AS SELECT 1 AS marker"
+              }
+            }
+            """.trimIndent()
+        ).resolve()
+
+        try {
+            val definition = SeaTunnelStyleConfigParser().parse(config)
+            val executableFlow = FlowAssembler(component.nodeFactoryRegistry()).assemble(definition)
+
+            component.sparkRuntime().run(executableFlow)
+
+            val rows = component.sparkSession().read().parquet(output.toString()).collectAsList()
+            assertEquals(2, rows.size)
+            assertEquals(1, component.sparkSession().table(actionTable).count())
+        } finally {
+            component.sparkSession().sql("DROP TABLE IF EXISTS $actionTable")
+        }
+    }
+
+    @Test
+    fun `runs action-only HOCON flow`() {
+        val viewName = "spark_boot_action_view_${System.nanoTime()}"
+        val config = ConfigFactory.parseString(
+            """
+            env { job.name = "action-only" }
+
+            action {
+              Sql {
+                sql = "CREATE OR REPLACE TEMP VIEW $viewName AS SELECT 1 AS marker"
+              }
+            }
+            """.trimIndent()
+        ).resolve()
+
+        val definition = SeaTunnelStyleConfigParser().parse(config)
+        val executableFlow = FlowAssembler(component.nodeFactoryRegistry()).assemble(definition)
+
+        component.sparkRuntime().run(executableFlow)
+
+        assertEquals(1, component.sparkSession().table(viewName).count())
+    }
+
     data class Order(
         val id: String = "",
         val amount: Double = 0.0,

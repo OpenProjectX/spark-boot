@@ -20,6 +20,8 @@ interface SparkTransformNode<I, O> : SparkNode<I, O>
 
 interface SparkSinkNode<I> : SparkNode<I, Unit>
 
+interface SparkActionNode : SparkNode<Unit, Unit>
+
 class SparkRuntime(
     private val context: SparkExecutionContext
 ) {
@@ -32,7 +34,7 @@ class SparkRuntime(
         for (nodeId in graph.topologicalOrder()) {
             val node = flow.nodes[nodeId]
                 ?: error("Node not found: $nodeId")
-            val input = graph.resolveInput(nodeId, results)
+            val input = if (node is SparkActionNode) Unit else graph.resolveInput(nodeId, results)
             results[nodeId] = executeNode(node, input)
         }
     }
@@ -47,7 +49,7 @@ class SparkRuntime(
 }
 
 class DagGraph private constructor(
-    private val nodes: Set<String>,
+    private val nodes: Map<String, FlowNode<*, *>>,
     private val edges: List<EdgeDefinition>
 ) {
     private val incoming = edges.groupBy { it.to }
@@ -57,17 +59,18 @@ class DagGraph private constructor(
         require(nodes.isNotEmpty()) { "Flow must contain at least one node" }
 
         edges.forEach { edge ->
-            require(edge.from in nodes) { "Edge references unknown source node: ${edge.from}" }
-            require(edge.to in nodes) { "Edge references unknown target node: ${edge.to}" }
+            require(edge.from in nodes.keys) { "Edge references unknown source node: ${edge.from}" }
+            require(edge.to in nodes.keys) { "Edge references unknown target node: ${edge.to}" }
         }
 
-        val sourceCount = nodes.count { incoming[it].isNullOrEmpty() }
-        val sinkCount = nodes.count { outgoing[it].isNullOrEmpty() }
+        val sourceCount = nodes.keys.count { incoming[it].isNullOrEmpty() }
+        val sinkCount = nodes.keys.count { outgoing[it].isNullOrEmpty() }
         require(sourceCount > 0) { "Flow must contain at least one source node" }
         require(sinkCount > 0) { "Flow must contain at least one sink node" }
 
         incoming.forEach { (nodeId, incomingEdges) ->
-            require(incomingEdges.size <= 1) {
+            val node = nodes.getValue(nodeId)
+            require(node is SparkActionNode || incomingEdges.size <= 1) {
                 "Node $nodeId has ${incomingEdges.size} inputs; v1 supports only one input per node"
             }
         }
@@ -76,7 +79,7 @@ class DagGraph private constructor(
     }
 
     fun topologicalOrder(): List<String> {
-        val inDegree = nodes.associateWith { incoming[it]?.size ?: 0 }.toMutableMap()
+        val inDegree = nodes.keys.associateWith { incoming[it]?.size ?: 0 }.toMutableMap()
         val ready = ArrayDeque(inDegree.filterValues { it == 0 }.keys.sorted())
         val ordered = mutableListOf<String>()
 
@@ -109,7 +112,7 @@ class DagGraph private constructor(
     companion object {
         fun from(flow: ExecutableFlow): DagGraph {
             require(flow.nodes.size == flow.nodes.keys.toSet().size) { "Duplicate node ids are not allowed" }
-            return DagGraph(flow.nodes.keys, flow.edges)
+            return DagGraph(flow.nodes, flow.edges)
         }
     }
 }

@@ -58,6 +58,10 @@ class JdbcSinkNodeFactory @Inject constructor(
     override fun create(): JdbcSinkNode = JdbcSinkNode(jdbcConnectionRegistry)
 }
 
+class SqlActionNodeFactory @Inject constructor() : NodeFactory<SqlActionNode> {
+    override fun create(): SqlActionNode = SqlActionNode()
+}
+
 class ParquetSourceConfigFactory @Inject constructor() : ConfigNodeFactory {
     override fun create(config: Map<String, Any?>): FlowNode<*, *> {
         return ParquetSourceNode().apply {
@@ -188,6 +192,15 @@ class JdbcSinkConfigFactory @Inject constructor(
             user = optionalString(config, "user")
             password = optionalString(config, "password")
             mode = saveMode(config["save_mode"] ?: config["mode"], SaveMode.Append)
+        }
+    }
+}
+
+class SqlActionConfigFactory @Inject constructor() : ConfigNodeFactory {
+    override fun create(config: Map<String, Any?>): FlowNode<*, *> {
+        return SqlActionNode().apply {
+            sql = requiredString(config, "sql")
+            label = optionalString(config, "label")
         }
     }
 }

@@ -5,4 +5,7 @@ plugins {
 dependencies {
     api(project(":core"))
     implementation(libs.typesafeConfig)
+
+    testImplementation(libs.junitJupiter)
+    testRuntimeOnly(libs.junitPlatformLauncher)
 }

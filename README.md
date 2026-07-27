@@ -10,7 +10,7 @@ It provides:
 - a portable Flow / Node / Edge model
 - a versioned JSON-friendly FlowDocument IR for tools and UI builders
 - a Spark 4 runtime backed by `org.openprojectx.spark.platform`
-- built-in Parquet, Kafka, JDBC source/sink, SQL filter/select/transform, Iceberg sink, and Hudi source/sink nodes
+- built-in Parquet, Kafka, JDBC source/sink, SQL filter/select/transform/action, Iceberg sink, and Hudi source/sink nodes
 
 Compatibility target:
 

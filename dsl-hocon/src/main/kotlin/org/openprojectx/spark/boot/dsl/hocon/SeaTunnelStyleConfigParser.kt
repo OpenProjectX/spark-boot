@@ -14,6 +14,7 @@ class SeaTunnelStyleConfigParser {
         parseSources(config, nodes)
         parseTransforms(config, nodes, edges)
         parseSinks(config, nodes, edges)
+        parseActions(config, nodes, edges)
 
         return FlowDefinition(
             name = readJobName(config),
@@ -127,12 +128,72 @@ class SeaTunnelStyleConfigParser {
         edges += EdgeDefinition(input, sinkId)
     }
 
+    private fun parseActions(
+        config: Config,
+        nodes: MutableList<NodeDefinition>,
+        edges: MutableList<EdgeDefinition>
+    ) {
+        if (!config.hasPath("action")) return
+
+        when (config.getValue("action").valueType()) {
+            ConfigValueType.LIST -> config.getConfigList("action").forEachIndexed { index, item ->
+                addAction(item.getString("plugin_name"), item, index, nodes, edges)
+            }
+            ConfigValueType.OBJECT -> {
+                var index = 0
+                config.getConfig("action").root().forEach { (pluginName, _) ->
+                    addAction(pluginName, config.getConfig("action").getConfig(pluginName), index++, nodes, edges)
+                }
+            }
+            else -> error("action must be object or list")
+        }
+    }
+
+    private fun addAction(
+        pluginName: String,
+        item: Config,
+        index: Int,
+        nodes: MutableList<NodeDefinition>,
+        edges: MutableList<EdgeDefinition>
+    ) {
+        val actionId = optionalOutput(item) ?: "action_${pluginName}_$index"
+        val nodeConfig = normalizedConfig(item) + mapOf(
+            "plugin_name" to pluginName,
+            "plugin_output" to actionId
+        )
+
+        nodes += NodeDefinition(actionId, "${pluginName}Action", nodeConfig)
+        readInputs(item).forEach { input ->
+            edges += EdgeDefinition(input, actionId)
+        }
+    }
+
     private fun readOutput(config: Config): String {
         return when {
             config.hasPath("plugin_output") -> config.getString("plugin_output")
             config.hasPath("result_table_name") -> config.getString("result_table_name")
             config.hasPath("source_table_name") -> config.getString("source_table_name")
             else -> error("Missing plugin_output")
+        }
+    }
+
+    private fun optionalOutput(config: Config): String? {
+        return when {
+            config.hasPath("plugin_output") -> config.getString("plugin_output")
+            config.hasPath("result_table_name") -> config.getString("result_table_name")
+            config.hasPath("source_table_name") -> config.getString("source_table_name")
+            else -> null
+        }
+    }
+
+    private fun readInputs(config: Config): List<String> {
+        if (!config.hasPath("plugin_input")) {
+            return emptyList()
+        }
+        return when (config.getValue("plugin_input").valueType()) {
+            ConfigValueType.LIST -> config.getStringList("plugin_input")
+            ConfigValueType.STRING -> listOf(config.getString("plugin_input"))
+            else -> error("plugin_input must be a string or list")
         }
     }
 
