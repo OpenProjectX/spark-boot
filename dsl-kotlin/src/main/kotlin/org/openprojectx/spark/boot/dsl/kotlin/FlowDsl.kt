@@ -2,8 +2,11 @@ package org.openprojectx.spark.boot.dsl.kotlin
 
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.Row
+import org.openprojectx.spark.boot.connectors.HudiSinkNode
+import org.openprojectx.spark.boot.connectors.HudiSourceNode
 import org.openprojectx.spark.boot.connectors.IcebergSinkNode
 import org.openprojectx.spark.boot.connectors.JdbcSourceNode
+import org.openprojectx.spark.boot.connectors.KafkaSourceNode
 import org.openprojectx.spark.boot.connectors.ParquetSinkNode
 import org.openprojectx.spark.boot.connectors.ParquetSourceNode
 import org.openprojectx.spark.boot.connectors.SelectNode
@@ -78,8 +81,20 @@ class SparkFlowBuilder(
         return register(id, node)
     }
 
+    fun kafkaSource(id: String, customize: KafkaSourceNode.() -> Unit): NodeRef<KafkaSourceNode> {
+        val node = component.kafkaSourceNodeFactory().create()
+        node.customize()
+        return register(id, node)
+    }
+
     fun jdbcSource(id: String, customize: JdbcSourceNode.() -> Unit): NodeRef<JdbcSourceNode> {
         val node = component.jdbcSourceNodeFactory().create()
+        node.customize()
+        return register(id, node)
+    }
+
+    fun hudiSource(id: String, customize: HudiSourceNode.() -> Unit): NodeRef<HudiSourceNode> {
+        val node = component.hudiSourceNodeFactory().create()
         node.customize()
         return register(id, node)
     }
@@ -98,6 +113,12 @@ class SparkFlowBuilder(
 
     fun parquetSink(id: String, customize: ParquetSinkNode.() -> Unit): NodeRef<ParquetSinkNode> {
         val node = component.parquetSinkNodeFactory().create()
+        node.customize()
+        return register(id, node)
+    }
+
+    fun hudiSink(id: String, customize: HudiSinkNode.() -> Unit): NodeRef<HudiSinkNode> {
+        val node = component.hudiSinkNodeFactory().create()
         node.customize()
         return register(id, node)
     }
@@ -140,6 +161,12 @@ fun NodeRef<*>.select(id: String, customize: SelectNode.() -> Unit): NodeRef<Sel
 
 fun NodeRef<*>.writeParquet(id: String, customize: ParquetSinkNode.() -> Unit): NodeRef<ParquetSinkNode> {
     val next = sparkBuilder().parquetSink(id, customize)
+    then(next)
+    return next
+}
+
+fun NodeRef<*>.writeHudi(id: String, customize: HudiSinkNode.() -> Unit): NodeRef<HudiSinkNode> {
+    val next = sparkBuilder().hudiSink(id, customize)
     then(next)
     return next
 }

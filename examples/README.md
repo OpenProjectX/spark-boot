@@ -31,6 +31,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-co
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kafka-hudi-hms:run --no-configuration-cache
 ```
 
 The `:kotlin-dsl` example is self-contained. It creates temporary Parquet input,
@@ -69,6 +70,26 @@ Run the tests:
 
 ```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:test --no-configuration-cache
+```
+
+## Run Kafka Hudi HMS
+
+The `:kafka-hudi-hms` module is both a runnable app and a JUnit-backed
+integration example. It starts Kafka, LocalStack S3, and Hive Metastore through
+`org.openprojectx.bigdata-test`, seeds JSON order events into Kafka, filters paid
+orders with Spark SQL, and writes HMS-synced Hudi tables to S3. The app and tests
+cover both HOCON config and Kotlin DSL flows.
+
+Run the app:
+
+```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kafka-hudi-hms:run --no-configuration-cache
+```
+
+Run the tests:
+
+```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kafka-hudi-hms:test --no-configuration-cache
 ```
 
 ## Adding More Examples

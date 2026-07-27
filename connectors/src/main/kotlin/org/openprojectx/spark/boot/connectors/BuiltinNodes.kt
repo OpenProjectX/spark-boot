@@ -34,6 +34,50 @@ class ParquetSinkNode : SparkSinkNode<Dataset<Row>> {
     }
 }
 
+class KafkaSourceNode : SparkSourceNode<Dataset<Row>> {
+    lateinit var bootstrapServers: String
+    var topic: String? = null
+    var subscribe: String? = null
+    var subscribePattern: String? = null
+    var assign: String? = null
+    var startingOffsets: String = "earliest"
+    var endingOffsets: String = "latest"
+    var includeHeaders: Boolean = false
+    var failOnDataLoss: Boolean = true
+    var options: Map<String, String> = emptyMap()
+
+    override val name: String = "kafka-source"
+
+    override fun execute(input: Unit, context: SparkExecutionContext): Dataset<Row> {
+        val reader = context.spark.read()
+            .format("kafka")
+            .option("kafka.bootstrap.servers", bootstrapServers)
+            .option("startingOffsets", startingOffsets)
+            .option("endingOffsets", endingOffsets)
+            .option("includeHeaders", includeHeaders.toString())
+            .option("failOnDataLoss", failOnDataLoss.toString())
+
+        options.forEach { (key, value) -> reader.option(key, value) }
+        when {
+            assign != null -> reader.option("assign", assign)
+            subscribePattern != null -> reader.option("subscribePattern", subscribePattern)
+            subscribe != null -> reader.option("subscribe", subscribe)
+            topic != null -> reader.option("subscribe", topic)
+            else -> error("Kafka source requires one of topic, subscribe, subscribePattern, or assign")
+        }
+
+        return reader.load().selectExpr(
+            "CAST(key AS STRING) AS key",
+            "CAST(value AS STRING) AS value",
+            "topic",
+            "partition",
+            "offset",
+            "timestamp",
+            "timestampType"
+        )
+    }
+}
+
 class JdbcSourceNode(
     private val jdbcConnectionRegistry: JdbcConnectionRegistry? = null
 ) : SparkSourceNode<Dataset<Row>> {
@@ -64,6 +108,83 @@ class JdbcSourceNode(
             .option("password", jdbcPassword)
         jdbcDriver?.let { reader.option("driver", it) }
         return reader.load()
+    }
+}
+
+class HudiSourceNode : SparkSourceNode<Dataset<Row>> {
+    lateinit var path: String
+    var queryType: String? = null
+    var options: Map<String, String> = emptyMap()
+
+    override val name: String = "hudi-source"
+
+    override fun execute(input: Unit, context: SparkExecutionContext): Dataset<Row> {
+        val reader = context.spark.read().format("hudi")
+        queryType?.let { reader.option("hoodie.datasource.query.type", it) }
+        options.forEach { (key, value) -> reader.option(key, value) }
+        return reader.load(path)
+    }
+}
+
+class HudiSinkNode : SparkSinkNode<Dataset<Row>> {
+    lateinit var path: String
+    lateinit var table: String
+    lateinit var recordKeyField: String
+    lateinit var precombineField: String
+    var database: String = "default"
+    var partitionPathField: String? = null
+    var tableType: String = "COPY_ON_WRITE"
+    var operation: String = "upsert"
+    var mode: SaveMode = SaveMode.ErrorIfExists
+    var hiveSync: Boolean = false
+    var hiveSyncMode: String = "hms"
+    var hiveMetastoreUris: String? = null
+    var hiveSyncDatabase: String? = null
+    var hiveSyncTable: String? = null
+    var options: Map<String, String> = emptyMap()
+
+    override val name: String = "hudi-sink"
+
+    override fun execute(input: Dataset<Row>, context: SparkExecutionContext) {
+        val writer = input.write()
+            .format("hudi")
+            .mode(mode)
+            .option("hoodie.table.name", table)
+            .option("hoodie.datasource.write.table.name", table)
+            .option("hoodie.datasource.write.recordkey.field", recordKeyField)
+            .option("hoodie.datasource.write.precombine.field", precombineField)
+            .option("hoodie.datasource.write.table.type", tableType)
+            .option("hoodie.datasource.write.operation", operation)
+
+        partitionPathField?.let { field ->
+            writer.option("hoodie.datasource.write.partitionpath.field", field)
+            writer.option("hoodie.datasource.write.hive_style_partitioning", "true")
+        }
+
+        if (hiveSync) {
+            writer
+                .option("hoodie.datasource.hive_sync.enable", "true")
+                .option("hoodie.datasource.hive_sync.mode", hiveSyncMode)
+                .option("hoodie.datasource.hive_sync.database", hiveSyncDatabase ?: database)
+                .option("hoodie.datasource.hive_sync.table", hiveSyncTable ?: table)
+                .option("hoodie.datasource.meta.sync.enable", "true")
+                .option("hoodie.datasource.meta.sync.database", hiveSyncDatabase ?: database)
+                .option("hoodie.datasource.meta.sync.table", hiveSyncTable ?: table)
+            partitionPathField?.let { writer.option("hoodie.datasource.hive_sync.partition_fields", it) }
+            resolveHiveMetastoreUris(context)?.let { uris ->
+                writer.option("hoodie.datasource.hive_sync.metastore.uris", uris)
+            }
+        }
+
+        options.forEach { (key, value) -> writer.option(key, value) }
+        writer.save(path)
+    }
+
+    private fun resolveHiveMetastoreUris(context: SparkExecutionContext): String? {
+        return hiveMetastoreUris
+            ?: runCatching { context.spark.conf().get("hive.metastore.uris") }.getOrNull()
+            ?: context.spark.sparkContext().hadoopConfiguration().get("hive.metastore.uris")
+            ?: System.getProperty("hive.metastore.uris")
     }
 }
 

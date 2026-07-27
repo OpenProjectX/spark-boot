@@ -20,8 +20,14 @@ import org.openprojectx.spark.boot.connectors.JdbcSinkConfigFactory
 import org.openprojectx.spark.boot.connectors.JdbcSinkNodeFactory
 import org.openprojectx.spark.boot.connectors.JdbcSourceConfigFactory
 import org.openprojectx.spark.boot.connectors.JdbcSourceNodeFactory
+import org.openprojectx.spark.boot.connectors.HudiSinkConfigFactory
+import org.openprojectx.spark.boot.connectors.HudiSinkNodeFactory
+import org.openprojectx.spark.boot.connectors.HudiSourceConfigFactory
+import org.openprojectx.spark.boot.connectors.HudiSourceNodeFactory
 import org.openprojectx.spark.boot.connectors.IcebergSinkConfigFactory
 import org.openprojectx.spark.boot.connectors.IcebergSinkNodeFactory
+import org.openprojectx.spark.boot.connectors.KafkaSourceConfigFactory
+import org.openprojectx.spark.boot.connectors.KafkaSourceNodeFactory
 import org.openprojectx.spark.boot.connectors.ParquetSinkConfigFactory
 import org.openprojectx.spark.boot.connectors.ParquetSinkNodeFactory
 import org.openprojectx.spark.boot.connectors.ParquetSourceConfigFactory
@@ -58,7 +64,10 @@ interface SparkBootComponent {
 
     fun parquetSourceNodeFactory(): ParquetSourceNodeFactory
     fun parquetSinkNodeFactory(): ParquetSinkNodeFactory
+    fun kafkaSourceNodeFactory(): KafkaSourceNodeFactory
     fun jdbcSourceNodeFactory(): JdbcSourceNodeFactory
+    fun hudiSourceNodeFactory(): HudiSourceNodeFactory
+    fun hudiSinkNodeFactory(): HudiSinkNodeFactory
     fun icebergSinkNodeFactory(): IcebergSinkNodeFactory
     fun sqlFilterNodeFactory(): SqlFilterNodeFactory
     fun selectNodeFactory(): SelectNodeFactory
@@ -93,6 +102,7 @@ object SparkModule {
             .appName("spark-boot")
             .master("local[*]")
             .config("spark.ui.enabled", "false")
+            .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             .config("spark.sql.planChangeValidation", "false")
             .config("spark.sql.lightweightPlanChangeValidation", "false")
 
@@ -158,6 +168,7 @@ object SparkModule {
                 "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED",
             )
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+            .config("spark.sql.warehouse.dir", warehouse)
             .config("spark.sql.catalog.$catalog", "org.apache.iceberg.spark.SparkCatalog")
             .config("spark.sql.catalog.$catalog.type", "hive")
             .config("spark.sql.catalog.$catalog.uri", metastoreUris)
@@ -257,8 +268,23 @@ interface BuiltinConnectorModule {
 
     @Binds
     @IntoMap
+    @StringKey("KafkaSource")
+    fun bindProgrammaticKafkaSourceFactory(factory: KafkaSourceNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
     @StringKey("JdbcSource")
     fun bindProgrammaticJdbcSourceFactory(factory: JdbcSourceNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("HudiSource")
+    fun bindProgrammaticHudiSourceFactory(factory: HudiSourceNodeFactory): UntypedNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("HudiSink")
+    fun bindProgrammaticHudiSinkFactory(factory: HudiSinkNodeFactory): UntypedNodeFactory
 
     @Binds
     @IntoMap
@@ -297,8 +323,23 @@ interface BuiltinConnectorModule {
 
     @Binds
     @IntoMap
+    @StringKey("KafkaSource")
+    fun bindKafkaSourceFactory(factory: KafkaSourceConfigFactory): ConfigNodeFactory
+
+    @Binds
+    @IntoMap
     @StringKey("JdbcSource")
     fun bindJdbcSourceFactory(factory: JdbcSourceConfigFactory): ConfigNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("HudiSource")
+    fun bindHudiSourceFactory(factory: HudiSourceConfigFactory): ConfigNodeFactory
+
+    @Binds
+    @IntoMap
+    @StringKey("HudiSink")
+    fun bindHudiSinkFactory(factory: HudiSinkConfigFactory): ConfigNodeFactory
 
     @Binds
     @IntoMap

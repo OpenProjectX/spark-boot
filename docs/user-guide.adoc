@@ -390,11 +390,14 @@ The `connectors` module provides built-in nodes:
 
 * `ParquetSourceNode`
 * `ParquetSinkNode`
+* `KafkaSourceNode`
 * `JdbcSourceNode`
 * `SqlFilterNode`
 * `SelectNode`
 * `SqlTransformNode`
 * `IcebergSinkNode`
+* `HudiSourceNode`
+* `HudiSinkNode`
 * `JdbcSinkNode`
 
 It also provides Dagger-friendly programmatic factories and HOCON config factories for those nodes.
@@ -1154,6 +1157,89 @@ is created. The legacy compatibility settings still work:
 When HMS is configured, Spark Boot enables Hive support and registers the `hms` Iceberg catalog.
 Use table names such as `hms.default.paid_orders`.
 
+=== KafkaSource
+
+HOCON type: `Kafka`
+
+Required config:
+
+* `bootstrap_servers`
+
+Optional config:
+
+* `topic`
+* `subscribe`
+* `subscribe_pattern`
+* `assign`
+* `starting_offsets`
+* `ending_offsets`
+* `include_headers`
+* `fail_on_data_loss`
+
+Exactly one subscription selector should normally be provided.
+For the common single-topic case, use `topic`.
+Spark Boot reads Kafka in batch mode and exposes `key` and `value` as strings,
+plus Kafka metadata columns such as `topic`, `partition`, `offset`, and
+`timestamp`.
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+kafkaSource("orders") {
+    bootstrapServers = kafkaBootstrapServers
+    topic = "orders"
+    startingOffsets = "earliest"
+    endingOffsets = "latest"
+}
+----
+
+=== HudiSource and HudiSink
+
+HOCON types: `HudiSource`, `Hudi`
+
+`HudiSource` required config:
+
+* `path`
+
+`HudiSink` required config:
+
+* `path`
+* `table`
+* `record_key_field`
+* `precombine_field`
+
+Important optional config:
+
+* `database`
+* `partition_path_field`
+* `table_type`
+* `operation`
+* `save_mode`
+* `hive_sync`
+* `hive_sync_mode`
+* `hive_metastore_uris`
+
+When `hive_sync = true`, Spark Boot configures Hudi Hive sync for HMS-backed
+tables. The metastore URI can be supplied directly with `hive_metastore_uris`,
+or inherited from `spark.boot.hms.uri`, `hive.metastore.uris`, or the matching
+environment variables before the Spark session is created.
+
+Kotlin DSL:
+
+[source,kotlin]
+----
+paidOrders.writeHudi("hudi-sink") {
+    path = "s3a://warehouse/hudi/paid_orders"
+    table = "paid_orders"
+    database = "spark_boot_hudi"
+    recordKeyField = "id"
+    precombineField = "event_ts"
+    mode = SaveMode.Overwrite
+    hiveSync = true
+}
+----
+
 === JdbcSink
 
 HOCON type: `JdbcSink`
@@ -1314,6 +1400,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kotlin-dsl:run --no-co
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kafka-hudi-hms:run --no-configuration-cache
 ----
 
 The `examples` directory is an independent multi-module Gradle build.
@@ -1323,6 +1410,8 @@ The `:spark-boot-app` module demonstrates the `@SparkBoot` application entry poi
 The HOCON example is config-only: `org.openprojectx.bigdata-test` starts LocalStack S3 and prepares the Parquet input from TOML before the Spark Boot CLI runs `paid-orders.conf`.
 The `:jdbc-iceberg-hms` module is both a runnable app and a JUnit-backed integration example.
 It starts LocalStack S3 and Hive Metastore through `org.openprojectx.bigdata-test`; the app itself starts a MariaDB Testcontainers source and runs equivalent HOCON and Kotlin DSL flows into HMS-backed Iceberg tables.
+The `:kafka-hudi-hms` module is also a runnable app and a JUnit-backed integration example.
+It starts Testcontainers Kafka plus LocalStack S3 and Hive Metastore through `org.openprojectx.bigdata-test`; it seeds JSON order events into Kafka, filters paid orders, writes Hudi tables on S3, and verifies HMS sync for both HOCON and Kotlin DSL flows.
 
 == Current Limitations
 
