@@ -1,5 +1,5 @@
 [services]
-localStackS3 = true
+s3 = true
 hiveMetastore = true
 kafka = true
 
@@ -26,5 +26,5 @@ append = false
 hiveMetastore = "INFO"
 kafka = "INFO"
 
-[containers.localstackS3.env]
+[containers.s3.env]
 DISABLE_CORS_CHECKS = "1"

@@ -1,5 +1,5 @@
 [services]
-localStackS3 = true
+s3 = true
 hiveMetastore = true
 
 [images]
@@ -23,5 +23,5 @@ append = false
 [containerLogLevels]
 hiveMetastore = "INFO"
 
-[containers.localstackS3.env]
+[containers.s3.env]
 DISABLE_CORS_CHECKS = "1"
