@@ -1,7 +1,7 @@
 plugins {
     id("buildsrc.convention.kotlin-jvm")
     id("org.jetbrains.kotlin.kapt")
-    id("org.openprojectx.spark.platform") version "0.1.41"
+    id("org.openprojectx.spark.platform") version "0.1.42"
 }
 
 sparkPlatform {

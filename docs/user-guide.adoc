@@ -336,7 +336,7 @@ Spark dependencies are managed with the Spark Platform Gradle plugin:
 
 [source,kotlin]
 ----
-id("org.openprojectx.spark.platform") version "0.1.41"
+id("org.openprojectx.spark.platform") version "0.1.42"
 ----
 
 Spark-facing modules set:

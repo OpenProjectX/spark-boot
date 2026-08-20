@@ -1,6 +1,6 @@
 plugins {
     id("buildsrc.convention.kotlin-jvm")
-    id("org.openprojectx.spark.platform") version "0.1.41"
+    id("org.openprojectx.spark.platform") version "0.1.42"
 }
 
 description = "Spark Boot runtime dependency carrier for Spark 4 with Scala 2.13."

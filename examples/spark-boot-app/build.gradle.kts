@@ -2,7 +2,7 @@ plugins {
     application
     kotlin("jvm") version "2.2.21"
     kotlin("kapt") version "2.2.21"
-    id("org.openprojectx.spark.platform") version "0.1.41"
+    id("org.openprojectx.spark.platform") version "0.1.42"
 }
 
 kotlin {
