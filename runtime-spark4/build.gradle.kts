@@ -13,7 +13,7 @@ sparkPlatform {
 dependencies {
     api(project(":runtime-spark"))
 
-    api("org.apache.spark:spark-sql_2.13")
+    api("org.apache.spark:spark-sql_2.13:4.0.1")
     testImplementation(libs.junitJupiter)
     testRuntimeOnly(libs.junitPlatformLauncher)
 }
