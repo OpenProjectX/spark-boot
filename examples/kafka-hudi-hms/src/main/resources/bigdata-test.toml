@@ -24,7 +24,7 @@ append = false
 
 [containerLogLevels]
 hiveMetastore = "INFO"
-kafka = "INFO"
+#kafka = "INFO"
 
 #[containers.s3.env]
 #DISABLE_CORS_CHECKS = "1"
