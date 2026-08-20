@@ -19,3 +19,13 @@ class IcebergCatalogRegistry(
         return find(name) ?: error("Unknown Spark Boot Iceberg catalog: $name")
     }
 }
+
+class HiveCatalogRegistry(
+    private val catalogs: Map<String, HiveCatalogProperties>
+) {
+    fun find(name: String): HiveCatalogProperties? = catalogs[name]
+
+    fun get(name: String): HiveCatalogProperties {
+        return find(name) ?: error("Unknown Spark Boot Hive catalog: $name")
+    }
+}

@@ -32,6 +32,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --n
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kafka-hudi-hms:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :multi-hms-catalogs:run --no-configuration-cache
 ```
 
 The `:kotlin-dsl` example is self-contained. It creates temporary Parquet input,
@@ -90,6 +91,27 @@ Run the tests:
 
 ```bash
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kafka-hudi-hms:test --no-configuration-cache
+```
+
+## Run Multi HMS Catalogs
+
+The `:multi-hms-catalogs` module starts two independent Hive Metastore instances
+through `org.openprojectx.bigdata-test`. It configures four Spark SQL catalogs
+in one `SparkSession`:
+`analytics_iceberg` and `archive_iceberg` use Iceberg's Hive catalog client,
+while `analytics_hive` and `archive_hive` use Kyuubi's DataSource V2 Hive
+catalog client. The app creates and reads tables through all four catalogs.
+
+Run the app:
+
+```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :multi-hms-catalogs:run --no-configuration-cache
+```
+
+Run the tests:
+
+```bash
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :multi-hms-catalogs:test --no-configuration-cache
 ```
 
 ## Adding More Examples

@@ -36,16 +36,22 @@ object SparkBootConfigLoader {
 
         val explicitCatalogs = sparkBoot.optionalConfig("iceberg.catalogs")
             ?.children()
-            ?.mapValues { (name, catalog) ->
-                IcebergCatalogProperties(
-                    name = name,
-                    type = catalog.optionalString("type") ?: "hive",
-                    uri = catalog.optionalString("uri"),
-                    warehouse = catalog.optionalString("warehouse"),
-                    properties = catalog.optionalConfig("properties")?.stringMap().orEmpty()
-                )
-            }
+            ?.mapValues { (name, catalog) -> catalog.toIcebergCatalog(name) }
             .orEmpty()
+        val explicitHiveCatalogs = sparkBoot.optionalConfig("hive.catalogs")
+            ?.children()
+            ?.mapValues { (name, catalog) -> catalog.toHiveCatalog(name) }
+            .orEmpty()
+
+        val typedCatalogs = sparkBoot.optionalConfig("catalogs")
+            ?.children()
+            .orEmpty()
+        val typedIcebergCatalogs = typedCatalogs
+            .filterValues { catalog -> catalog.catalogKind() == "iceberg-hive" }
+            .mapValues { (name, catalog) -> catalog.toIcebergCatalog(name, type = "hive") }
+        val typedHiveCatalogs = typedCatalogs
+            .filterValues { catalog -> catalog.catalogKind() == "kyuubi-hive" }
+            .mapValues { (name, catalog) -> catalog.toHiveCatalog(name) }
 
         val hmsCatalog = hms?.let {
             it.catalog to IcebergCatalogProperties(
@@ -87,7 +93,8 @@ object SparkBootConfigLoader {
                     )
                 }
                 .orEmpty(),
-            icebergCatalogs = explicitCatalogs + listOfNotNull(hmsCatalog)
+            icebergCatalogs = explicitCatalogs + typedIcebergCatalogs + listOfNotNull(hmsCatalog),
+            hiveCatalogs = explicitHiveCatalogs + typedHiveCatalogs
         )
     }
 
@@ -107,6 +114,32 @@ object SparkBootConfigLoader {
             .filter(String::isNotBlank)
             .toSet()
     }
+}
+
+private fun Config.toIcebergCatalog(name: String, type: String? = null): IcebergCatalogProperties {
+    return IcebergCatalogProperties(
+        name = name,
+        type = type ?: optionalString("type")?.removeSuffix("-hive") ?: "hive",
+        uri = optionalString("uri"),
+        warehouse = optionalString("warehouse"),
+        properties = optionalConfig("properties")?.stringMap().orEmpty()
+    )
+}
+
+private fun Config.toHiveCatalog(name: String): HiveCatalogProperties {
+    return HiveCatalogProperties(
+        name = name,
+        uri = requiredString("uri"),
+        properties = optionalConfig("properties")?.stringMap().orEmpty()
+    )
+}
+
+private fun Config.catalogKind(): String {
+    val kind = requiredString("type")
+    require(kind in setOf("iceberg-hive", "kyuubi-hive")) {
+        "Unsupported spark.boot.catalogs catalog type: $kind"
+    }
+    return kind
 }
 
 private fun Config.children(): Map<String, Config> {

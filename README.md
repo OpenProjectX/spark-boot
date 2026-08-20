@@ -143,6 +143,17 @@ spark.boot {
     warehouse = "s3a://warehouse/iceberg"
     catalog = "hms"
   }
+
+  catalogs.analytics_iceberg {
+    type = "iceberg-hive"
+    uri = "thrift://analytics-hms:9083"
+    warehouse = "s3a://warehouse/analytics/iceberg"
+  }
+
+  catalogs.analytics_hive {
+    type = "kyuubi-hive"
+    uri = "thrift://analytics-hms:9083"
+  }
 }
 ```
 
@@ -185,6 +196,7 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :spark-boot-app:run --n
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :hocon:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :jdbc-iceberg-hms:run --no-configuration-cache
 env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :kafka-hudi-hms:run --no-configuration-cache
+env GRADLE_USER_HOME=/data/.gradle ./gradlew -p examples :multi-hms-catalogs:run --no-configuration-cache
 ```
 
 The `examples` directory is an independent multi-module Gradle build. It is not included in the root build and consumes `org.openprojectx.spark.boot:*:0.1.0-SNAPSHOT` artifacts from Maven local.

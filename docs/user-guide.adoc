@@ -435,6 +435,127 @@ is currently selected by the Spark 4 starter because the configured Spark
 Platform catalog only exposes a Spark 4 Hudi bundle and a Spark 3 Scala 2.12
 Hudi bundle. Spark Boot's Spark 3 line intentionally avoids Scala 2.12.
 
+== Starter-Style Infrastructure Config
+
+Spark Boot can configure shared infrastructure from `application.conf`, profile
+overlays, environment variables, and system properties before the Dagger
+component creates the `SparkSession`.
+
+Stable config should live in classpath resources. Dynamic endpoints such as
+Testcontainers ports can be supplied as system properties before
+`DaggerSparkBootComponent.create()` or `runSparkBoot`.
+
+=== Catalog Types
+
+Use `spark.boot.catalogs` for explicit Spark SQL catalogs. The `type` field
+selects the client implementation:
+
+[cols="1,2,2", options="header"]
+|===
+| Type | Spark catalog class | Purpose
+
+| `iceberg-hive`
+| `org.apache.iceberg.spark.SparkCatalog`
+| Iceberg tables whose catalog metadata is stored in a Hive Metastore.
+
+| `kyuubi-hive`
+| `org.apache.kyuubi.spark.connector.hive.HiveTableCatalog`
+| Hive tables exposed through Kyuubi's Spark DataSource V2 Hive connector.
+|===
+
+Both are client libraries inside the Spark application. They do not start a
+Kyuubi server, Gravitino server, or extra Spark engine.
+
+Example with two Hive Metastore instances in one Spark job:
+
+[source,hocon]
+----
+spark.boot.catalogs {
+  analytics_iceberg {
+    type = "iceberg-hive"
+    uri = "thrift://analytics-hms:9083"
+    warehouse = "s3a://warehouse/analytics/iceberg"
+  }
+
+  archive_iceberg {
+    type = "iceberg-hive"
+    uri = "thrift://archive-hms:9083"
+    warehouse = "s3a://warehouse/archive/iceberg"
+  }
+
+  analytics_hive {
+    type = "kyuubi-hive"
+    uri = "thrift://analytics-hms:9083"
+    properties {
+      warehouse = "s3a://warehouse/analytics/hive"
+    }
+  }
+
+  archive_hive {
+    type = "kyuubi-hive"
+    uri = "thrift://archive-hms:9083"
+    properties {
+      warehouse = "s3a://warehouse/archive/hive"
+    }
+  }
+}
+----
+
+Spark Boot maps this to Spark configuration:
+
+[source,text]
+----
+spark.sql.catalog.analytics_iceberg=org.apache.iceberg.spark.SparkCatalog
+spark.sql.catalog.analytics_iceberg.type=hive
+spark.sql.catalog.analytics_iceberg.uri=thrift://analytics-hms:9083
+spark.sql.catalog.analytics_iceberg.warehouse=s3a://warehouse/analytics/iceberg
+
+spark.sql.catalog.analytics_hive=org.apache.kyuubi.spark.connector.hive.HiveTableCatalog
+spark.sql.catalog.analytics_hive.hive.metastore.uris=thrift://analytics-hms:9083
+spark.sql.catalog.analytics_hive.warehouse=s3a://warehouse/analytics/hive
+----
+
+Use Iceberg catalogs for Iceberg table operations:
+
+[source,sql]
+----
+CREATE TABLE analytics_iceberg.sales.orders (id BIGINT, status STRING) USING iceberg;
+SELECT * FROM archive_iceberg.audit.orders;
+----
+
+Use Kyuubi Hive catalogs for Hive tables:
+
+[source,sql]
+----
+CREATE TABLE analytics_hive.raw.events (id BIGINT, status STRING) USING parquet;
+SELECT * FROM archive_hive.raw.events;
+----
+
+The older namespaced form remains supported:
+
+[source,hocon]
+----
+spark.boot.iceberg.catalogs.analytics {
+  type = "hive"
+  uri = "thrift://analytics-hms:9083"
+  warehouse = "s3a://warehouse/analytics/iceberg"
+}
+
+spark.boot.hive.catalogs.analytics_hive {
+  uri = "thrift://analytics-hms:9083"
+}
+----
+
+The `spark.boot.hms` shortcut is still available for the common single-HMS
+case. It creates one implicit Iceberg Hive catalog, defaulting to catalog name
+`hms`.
+
+Spark has one active Hadoop/S3A configuration per `SparkSession`. Multiple HMS
+catalogs are supported in one job, but per-catalog S3 endpoints are not a clean
+Spark-level abstraction. Prefer one object-store endpoint with separate
+warehouses or run separate Spark applications when the catalogs require
+different incompatible Hadoop filesystem settings.
+
 === connectors
 
 The `connectors` module provides built-in nodes:

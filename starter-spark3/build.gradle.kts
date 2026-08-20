@@ -21,4 +21,5 @@ dependencies {
     api(project(":connectors"))
     api(project(":dagger"))
     api(project(":cli"))
+    api("org.apache.kyuubi:kyuubi-spark-connector-hive_2.13:1.11.0")
 }

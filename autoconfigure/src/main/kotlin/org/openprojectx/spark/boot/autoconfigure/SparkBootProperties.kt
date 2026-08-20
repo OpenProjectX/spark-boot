@@ -5,7 +5,8 @@ data class SparkBootProperties(
     val s3: S3Properties? = null,
     val hms: HmsProperties? = null,
     val jdbcConnections: Map<String, JdbcConnectionProperties> = emptyMap(),
-    val icebergCatalogs: Map<String, IcebergCatalogProperties> = emptyMap()
+    val icebergCatalogs: Map<String, IcebergCatalogProperties> = emptyMap(),
+    val hiveCatalogs: Map<String, HiveCatalogProperties> = emptyMap()
 )
 
 data class S3Properties(
@@ -36,5 +37,11 @@ data class IcebergCatalogProperties(
     val type: String = "hive",
     val uri: String? = null,
     val warehouse: String? = null,
+    val properties: Map<String, String> = emptyMap()
+)
+
+data class HiveCatalogProperties(
+    val name: String,
+    val uri: String,
     val properties: Map<String, String> = emptyMap()
 )

@@ -9,6 +9,8 @@ import dagger.multibindings.Multibinds
 import dagger.multibindings.StringKey
 import javax.inject.Singleton
 import org.apache.spark.sql.SparkSession
+import org.openprojectx.spark.boot.autoconfigure.HiveCatalogProperties
+import org.openprojectx.spark.boot.autoconfigure.HiveCatalogRegistry
 import org.openprojectx.spark.boot.autoconfigure.HmsProperties
 import org.openprojectx.spark.boot.autoconfigure.IcebergCatalogProperties
 import org.openprojectx.spark.boot.autoconfigure.IcebergCatalogRegistry
@@ -100,6 +102,12 @@ object SparkModule {
 
     @Provides
     @Singleton
+    fun provideHiveCatalogRegistry(properties: SparkBootProperties): HiveCatalogRegistry {
+        return HiveCatalogRegistry(properties.hiveCatalogs)
+    }
+
+    @Provides
+    @Singleton
     fun provideSparkSession(properties: SparkBootProperties): SparkSession {
         val builder = SparkSession.builder()
             .appName("spark-boot")
@@ -109,11 +117,23 @@ object SparkModule {
             .config("spark.sql.planChangeValidation", "false")
             .config("spark.sql.lightweightPlanChangeValidation", "false")
 
+        configureSparkJvmOptions(builder)
         configureS3(builder, properties.s3)
         configureHiveMetastore(builder, properties.hms)
         configureIcebergCatalogs(builder, properties.icebergCatalogs.values)
+        configureKyuubiHiveCatalogs(builder, properties.hiveCatalogs.values)
 
         return builder.getOrCreate()
+    }
+
+    private fun configureSparkJvmOptions(builder: SparkSession.Builder) {
+        val javaOptions =
+            "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED " +
+                "--add-opens=java.base/java.nio=ALL-UNNAMED " +
+                "--add-opens=java.base/java.net=ALL-UNNAMED"
+        builder
+            .config("spark.driver.extraJavaOptions", javaOptions)
+            .config("spark.executor.extraJavaOptions", javaOptions)
     }
 
     private fun configureS3(builder: SparkSession.Builder, s3: S3Properties?) {
@@ -162,14 +182,6 @@ object SparkModule {
         builder
             .enableHiveSupport()
             .config("hive.metastore.uris", metastoreUris)
-            .config(
-                "spark.driver.extraJavaOptions",
-                "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED",
-            )
-            .config(
-                "spark.executor.extraJavaOptions",
-                "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED",
-            )
             .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
             .config("spark.sql.warehouse.dir", warehouse)
             .config("spark.sql.catalog.$catalog", "org.apache.iceberg.spark.SparkCatalog")
@@ -207,6 +219,28 @@ object SparkModule {
             builder.config("$prefix.type", catalog.type)
             catalog.uri?.let { builder.config("$prefix.uri", it) }
             catalog.warehouse?.let { builder.config("$prefix.warehouse", it) }
+            catalog.properties.forEach { (key, value) ->
+                builder.config("$prefix.$key", value)
+            }
+        }
+    }
+
+    private fun configureKyuubiHiveCatalogs(
+        builder: SparkSession.Builder,
+        catalogs: Collection<HiveCatalogProperties>
+    ) {
+        if (catalogs.isEmpty()) {
+            return
+        }
+
+        builder
+            .enableHiveSupport()
+            .config("spark.sql.catalogImplementation", "hive")
+
+        catalogs.forEach { catalog ->
+            val prefix = "spark.sql.catalog.${catalog.name}"
+            builder.config(prefix, "org.apache.kyuubi.spark.connector.hive.HiveTableCatalog")
+            builder.config("$prefix.hive.metastore.uris", catalog.uri)
             catalog.properties.forEach { (key, value) ->
                 builder.config("$prefix.$key", value)
             }
