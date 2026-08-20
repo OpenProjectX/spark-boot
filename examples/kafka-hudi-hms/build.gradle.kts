@@ -2,7 +2,7 @@ plugins {
     application
     kotlin("jvm") version "2.2.21"
     id("org.openprojectx.spark.platform") version "0.1.42"
-    id("org.openprojectx.bigdata-test") version "0.1.40"
+    id("org.openprojectx.bigdata-test") version "0.1.42"
 }
 
 kotlin {
