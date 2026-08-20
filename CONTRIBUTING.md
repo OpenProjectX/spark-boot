@@ -18,7 +18,8 @@ Requirements:
 - Java 17
 - Gradle wrapper from this repository
 - Kotlin 2.2.x through the Gradle build
-- Spark 4 dependencies managed by `org.openprojectx.spark.platform`
+- Spark dependencies managed by `org.openprojectx.spark.platform`
+- Spark 3 support uses Spark 3.5 with Scala 2.13; do not introduce Scala 2.12 artifacts
 
 Use the shared Gradle cache when available:
 
@@ -31,7 +32,11 @@ env GRADLE_USER_HOME=/data/.gradle ./gradlew test --no-configuration-cache
 | Module | Contribution focus |
 | --- | --- |
 | `core` | Portable flow model and factory contracts only. |
-| `runtime-spark` | Spark execution contracts, DAG validation, and runtime behavior. |
+| `runtime-spark` | Shared Spark execution contracts, DAG validation, and runtime behavior compiled against the Spark 3.5 Scala 2.13 baseline. |
+| `runtime-spark3` | Spark 3.5 Scala 2.13 runtime dependency carrier. |
+| `runtime-spark4` | Spark 4 runtime dependency carrier. |
+| `starter-spark3` | User-facing Spark 3.5 Scala 2.13 starter. |
+| `starter-spark4` | User-facing Spark 4 starter. |
 | `connectors` | Built-in Spark nodes and config factories. |
 | `dagger` | Dagger component, modules, and factory map bindings. |
 | `dsl-kotlin` | Programmatic Kotlin DSL and Spark-native escape hatches. |
@@ -51,6 +56,8 @@ It is excluded from the root project and should consume locally published Spark 
 - Use explicit Spark-native names such as `transformDataFrame`; avoid ambiguous executor-style names like `map` or `filter`.
 - Keep HOCON declarative. Do not add arbitrary scripting or JVM callback support to HOCON.
 - Add validation errors that explain the invalid node, edge, or config key.
+- Keep shared Spark-facing modules on the `spark3-scala213` platform line unless a module is intentionally Spark-line specific.
+- Put Spark-line-specific behavior behind `runtime-spark3`, `runtime-spark4`, or future line-specific connector modules; do not branch common code on concrete Spark version strings.
 
 ## Adding A Node
 

@@ -9,7 +9,7 @@ It provides:
 - Dagger-based compile-time construction and factory registration
 - a portable Flow / Node / Edge model
 - a versioned JSON-friendly FlowDocument IR for tools and UI builders
-- a Spark 4 runtime backed by `org.openprojectx.spark.platform`
+- Spark 3.5 and Spark 4 runtime selection backed by `org.openprojectx.spark.platform`
 - built-in Parquet, Kafka, JDBC source/sink, SQL filter/select/transform/action, Iceberg sink, and Hudi source/sink nodes
 
 Compatibility target:
@@ -25,7 +25,11 @@ not full Apache SeaTunnel runtime compatibility.
 | --- | --- |
 | `autoconfigure` | Spring Boot-style config properties and connection/catalog registries. |
 | `core` | Flow model, node definitions, factory contracts, and assembler. |
-| `runtime-spark` | Spark execution context, Spark node contracts, DAG validation, and runtime execution. |
+| `runtime-spark` | Shared Spark execution context, Spark node contracts, DAG validation, and runtime execution compiled against the Spark 3.5 Scala 2.13 baseline. |
+| `runtime-spark3` | Spark 3.5 Scala 2.13 dependency carrier for applications that want the Spark 3 line. |
+| `runtime-spark4` | Spark 4 dependency carrier for applications that want the Spark 4 line. |
+| `starter-spark3` | Convenience starter for Spark 3.5 Scala 2.13 applications. |
+| `starter-spark4` | Convenience starter for Spark 4 applications. |
 | `connectors` | Built-in Spark nodes and config factories. |
 | `dagger` | Dagger component, modules, and factory registry wiring. |
 | `dsl-kotlin` | Kotlin DSL and fluent pipeline chaining. |
@@ -60,6 +64,27 @@ Built-in node descriptors and structured validation diagnostics are exposed from
 the library so external graph builders do not need to hardcode node fields.
 
 ## Quick Start
+
+Choose one Spark line in application builds. Spark 3 support intentionally uses
+Scala 2.13 artifacts, not Scala 2.12:
+
+```kotlin
+dependencies {
+    implementation("org.openprojectx.spark.boot:starter-spark4:<version>")
+}
+```
+
+or:
+
+```kotlin
+dependencies {
+    implementation("org.openprojectx.spark.boot:starter-spark3:<version>")
+}
+```
+
+Library modules that contain shared Spark-facing code compile against Spark 3.5
+with Scala 2.13 as the lowest supported baseline. Spark 4 applications select
+Spark 4 dependencies through `starter-spark4` / `runtime-spark4`.
 
 Build and test:
 

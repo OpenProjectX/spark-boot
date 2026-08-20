@@ -325,7 +325,8 @@ Spark Boot currently targets:
 
 * Java 17
 * Kotlin 2.2.x
-* Spark 4
+* Spark 3.5 with Scala 2.13
+* Spark 4 with Scala 2.13
 * Scala 2.13 Spark artifacts
 * Gradle Kotlin DSL
 * Dagger 2
@@ -343,9 +344,30 @@ Spark-facing modules set:
 [source,kotlin]
 ----
 sparkPlatform {
-    line.set("spark4")
+    line.set("spark3-scala213")
 }
 ----
+
+Shared Spark Boot library modules compile against `spark3-scala213` as the
+lowest supported Spark API baseline. User applications select their runtime line
+with one of the line-specific runtime or starter artifacts:
+
+[source,kotlin]
+----
+dependencies {
+    implementation("org.openprojectx.spark.boot:starter-spark3:<version>")
+}
+----
+
+[source,kotlin]
+----
+dependencies {
+    implementation("org.openprojectx.spark.boot:starter-spark4:<version>")
+}
+----
+
+`starter-spark3` uses Spark 3.5 Scala 2.13 artifacts. Spark Boot does not target
+the Scala 2.12 Spark 3 distribution.
 
 == Module Responsibilities
 
@@ -371,7 +393,7 @@ Use `ExecutableFlow` when actual runtime node instances have already been create
 
 === runtime-spark
 
-The `runtime-spark` module contains Spark-specific execution contracts:
+The `runtime-spark` module contains shared Spark-specific execution contracts:
 
 * `SparkExecutionContext`
 * `SparkNode`
@@ -384,6 +406,34 @@ The `runtime-spark` module contains Spark-specific execution contracts:
 `SparkRuntime` validates and executes a DAG.
 Data nodes support one input per transform or sink.
 Action nodes may have multiple incoming control edges.
+
+=== runtime-spark3 and runtime-spark4
+
+The `runtime-spark3` and `runtime-spark4` modules are line-specific dependency
+carrier modules. They depend on the shared `runtime-spark` code and apply the
+Spark Platform plugin with the matching line:
+
+* `runtime-spark3`: `spark3-scala213`
+* `runtime-spark4`: `spark4`
+
+Use them when building lower-level integrations that do not want the complete
+starter dependency set.
+
+=== starter-spark3 and starter-spark4
+
+The starter modules collect the public Spark Boot modules and select the Spark
+Platform line for an application:
+
+* `starter-spark3`: Spark 3.5 with Scala 2.13
+* `starter-spark4`: Spark 4 with Scala 2.13
+
+Applications should choose exactly one starter. Do not put both starters on the
+same classpath.
+
+The Spark 3 starter selects Iceberg and Hadoop/AWS platform dependencies. Hudi
+is currently selected by the Spark 4 starter because the configured Spark
+Platform catalog only exposes a Spark 4 Hudi bundle and a Spark 3 Scala 2.12
+Hudi bundle. Spark Boot's Spark 3 line intentionally avoids Scala 2.12.
 
 === connectors
 

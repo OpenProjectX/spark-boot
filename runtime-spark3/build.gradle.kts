@@ -1,8 +1,9 @@
 plugins {
     id("buildsrc.convention.kotlin-jvm")
-    id("org.jetbrains.kotlin.kapt")
     id("org.openprojectx.spark.platform") version "0.1.41"
 }
+
+description = "Spark Boot runtime dependency carrier for Spark 3.5 with Scala 2.13."
 
 sparkPlatform {
     line.set("spark3-scala213")
@@ -10,13 +11,9 @@ sparkPlatform {
 }
 
 dependencies {
-    api(project(":autoconfigure"))
-    api(project(":core"))
     api(project(":runtime-spark"))
-    api(project(":connectors"))
-    api(libs.dagger)
 
-    compileOnly("org.apache.spark:spark-sql_2.13")
-    kapt(libs.daggerCompiler)
-    testImplementation("org.apache.spark:spark-sql_2.13")
+    api("org.apache.spark:spark-sql_2.13")
+    testImplementation(libs.junitJupiter)
+    testRuntimeOnly(libs.junitPlatformLauncher)
 }

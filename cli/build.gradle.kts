@@ -5,7 +5,7 @@ plugins {
 }
 
 sparkPlatform {
-    line.set("spark4")
+    line.set("spark3-scala213")
     managedConfigurations.set(listOf("compileOnly", "testImplementation", "testRuntimeOnly"))
 }
 
