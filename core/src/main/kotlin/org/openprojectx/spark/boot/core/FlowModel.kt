@@ -114,14 +114,21 @@ data class ConfigFieldDescriptor(
     val description: String = "",
     val defaultValue: String? = null,
     val options: List<String> = emptyList(),
-    val secret: Boolean = false
+    val secret: Boolean = false,
+    /**
+     * Optional grouping key for generated forms. Node config is usually flat
+     * enough to ignore this; parameterised job templates use it to mirror the
+     * top-level HOCON blocks their keys live under (`source`, `target`, ...).
+     */
+    val section: String = ""
 )
 
 enum class ConfigFieldType {
     STRING,
     STRING_LIST,
     BOOLEAN,
-    SAVE_MODE
+    SAVE_MODE,
+    INT
 }
 
 data class FlowValidationDiagnostic(

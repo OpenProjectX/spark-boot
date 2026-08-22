@@ -1,0 +1,161 @@
+= Spark Boot Extension SPI
+:toc: left
+:source-highlighter: rouge
+
+How a library contributes node types and job templates to Spark Boot tooling
+(graph builders, linters, documentation generators) without depending on any
+particular tool.
+
+== Why an SPI
+
+Tools that build flows need to know what nodes exist and what fields they take.
+Hardcoding that list in the tool couples the tool to one set of connectors and
+makes third-party nodes invisible. The SPI inverts the dependency: contributing
+libraries declare what they offer, and tools discover them.
+
+The mechanism is plain `java.util.ServiceLoader`. That choice is deliberate:
+
+* A contributing library stays a **plain JVM library** — no CDI, no Spring, no
+  annotation processor, no dependency on the consuming tool. A Spark job jar
+  must not drag a web framework onto its classpath.
+* The same discovery works in a UI backend, a CLI linter, and a CI config
+  checker. One mechanism, not three.
+* Descriptors carry no Spark types, so tooling can load a full palette with no
+  Spark on its classpath.
+
+The direction of dependency is the load-bearing rule:
+
+[source,text]
+----
+contributing library  ──depends on──▶  spark-boot (SPI)  ◀──depends on──  tool
+----
+
+A contributing library must never depend on the tool that consumes it.
+
+== Contributing node types
+
+Implement `NodeDescriptorProvider` and register it:
+
+[source,kotlin]
+----
+class LakehouseNodeDescriptorProvider : NodeDescriptorProvider {
+    override val contributor = "lakehouse"
+    override fun descriptors() = listOf(
+        NodeDescriptor(
+            type = "IcebergMergeSink",
+            label = "Iceberg Merge Sink",
+            role = NodeRole.SINK,
+            category = "Sink",
+            description = "MERGEs a change stream into an Iceberg table.",
+            config = listOf(
+                ConfigFieldDescriptor("table", "Table", ConfigFieldType.STRING, required = true)
+            )
+        )
+    )
+}
+----
+
+`META-INF/services/org.openprojectx.spark.boot.core.NodeDescriptorProvider`:
+
+[source,text]
+----
+com.example.LakehouseNodeDescriptorProvider
+----
+
+Consume with `NodeCatalog`:
+
+[source,kotlin]
+----
+val catalog = NodeCatalog.discover()          // resolve ONCE and share
+val validator = FlowDefinitionValidator(catalog.descriptors)
+----
+
+Built-in nodes are **not special-cased**: `connectors` registers
+`BuiltinNodeDescriptorProvider` through this same path. A deployment that
+leaves `connectors` off the classpath simply gets a palette without them. If
+built-ins ever need a private code path, the SPI is wrong.
+
+=== Type id collisions
+
+Node type ids are a flat namespace, so two contributors can claim the same id.
+`NodeCatalog` does not silently resolve this: `find` returns the first
+contribution and `conflicts` reports every contested id with the contributors
+that claimed it. Tools should surface `conflicts` — a shadowed node type is
+otherwise invisible and produces a flow that runs the wrong operator.
+
+Namespaced type ids (`vendor/name`) are the eventual fix; they are a breaking
+change to persisted flow documents and are deferred.
+
+== Contributing job templates
+
+A `JobTemplate` is a parameterised flow: a pure function
+`Config -> FlowDefinition`. It is the layer at which non-authors consume a
+pipeline — they fill in parameters instead of wiring nodes.
+
+[source,kotlin]
+----
+object CdcSilverMergeJob : JobTemplate {
+    override val descriptor = JobDescriptor(
+        name = "cdc-silver-merge",
+        label = "CDC → Silver Merge",
+        schemaVersion = 1,
+        category = "silver",
+        fields = listOf(
+            ConfigFieldDescriptor(
+                key = "cdc.primary-key", label = "Primary key",
+                type = ConfigFieldType.STRING_LIST, required = true, section = "cdc"
+            )
+        )
+    )
+
+    override fun buildFlow(config: Config): FlowDefinition { /* ... */ }
+}
+----
+
+Register a `JobTemplateProvider` in
+`META-INF/services/org.openprojectx.spark.boot.template.JobTemplateProvider`
+and consume with `TemplateCatalog.discover()`.
+
+=== A template is a compiler, not a stencil
+
+The graph a template emits may depend on the config: an optional filter step
+appears when `source.where` is set, table identifiers are derived from tenant
+and layer, constants are injected. That is why the template-level spec is a
+*parameter schema* rather than "flow IR with placeholders" — placeholders
+cannot express conditional topology or derived values.
+
+Two consequences for tooling:
+
+. `buildFlow` is **not invertible**. A generated flow must be presented as
+  read-only output; edits to it cannot be projected back onto parameters.
+. The **config is the artifact of record**, not the generated IR. Persisting
+  the IR for a template instance creates a second source of truth that
+  disagrees the moment the template is upgraded.
+
+=== Descriptors and diagnostics
+
+`JobDescriptor` is the single source of truth for a template's identity —
+`JobTemplate.name` and `schemaVersion` default to reading from it, so the two
+cannot drift. It drives four consumers that would otherwise diverge: form
+rendering, CI config linting, runtime validation, and generated documentation.
+
+`JobTemplate.validate(config)` returns `JobConfigDiagnostic`s anchored to
+config paths, so a form can highlight the offending input in place. The default
+implementation compiles the config and reports the first failure — adequate for
+a CLI, poor for a form. Templates that back a UI should override it to report
+every field at once.
+
+== Descriptor vs. document
+
+Two specs at two levels, easily confused:
+
+[cols="1,2,2", options="header"]
+|===
+| | `NodeDescriptor` / `FlowDocument` | `JobDescriptor`
+
+| Describes | one box in a graph / a concrete graph | the *input domain* of a function that emits a graph
+| Level | nodes, edges, wiring | parameters (`cdc.primary-key`)
+| Author | pipeline author | parameter filler
+| Editing surface | the canvas | a form
+| Relationship | the **output** of `buildFlow` | the **signature** of `buildFlow`
+|===

@@ -387,9 +387,25 @@ Important types:
 * `ConfigNodeFactory`
 * `NodeFactoryRegistry`
 * `FlowAssembler`
+* `NodeDescriptorProvider` / `NodeCatalog` (the tooling SPI)
 
 Use `FlowDefinition` for declarative descriptions, such as HOCON.
 Use `ExecutableFlow` when actual runtime node instances have already been created.
+
+=== job-template
+
+The `job-template` module contains the parameterised-job abstraction, one level
+above the flow graph. It depends on `core` and HOCON, never on Spark.
+
+Important types:
+
+* `JobTemplate` — a pure function `Config -> FlowDefinition`
+* `JobDescriptor` — the parameters a template accepts
+* `JobConfigDiagnostic` — a config problem anchored to a config path
+* `JobTemplateProvider` / `TemplateCatalog` (the tooling SPI)
+
+Use it when non-authors should consume a pipeline by filling in parameters
+rather than wiring nodes. See `docs/extensions.adoc`.
 
 === runtime-spark
 
@@ -1568,6 +1584,12 @@ Input handling:
 * action incoming edges are control dependencies and may be multi-input
 
 == Extending Spark Boot
+
+Spark Boot is extended at two levels. Adding *nodes and flows* to your own
+application is covered below. Contributing node types or job templates so that
+external tooling — graph builders, linters, documentation generators —
+discovers them from the classpath is a separate mechanism, documented in
+`docs/extensions.adoc`.
 
 === Add a Programmatic Node
 

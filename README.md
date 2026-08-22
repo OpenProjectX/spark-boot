@@ -9,6 +9,7 @@ It provides:
 - Dagger-based compile-time construction and factory registration
 - a portable Flow / Node / Edge model
 - a versioned JSON-friendly FlowDocument IR for tools and UI builders
+- a ServiceLoader extension SPI so third-party libraries can contribute node types and job templates
 - Spark 3.5 and Spark 4 runtime selection backed by `org.openprojectx.spark.platform`
 - built-in Parquet, Kafka, JDBC source/sink, SQL filter/select/transform/action, Iceberg sink, and Hudi source/sink nodes
 
@@ -34,6 +35,7 @@ not full Apache SeaTunnel runtime compatibility.
 | `dagger` | Dagger component, modules, and factory registry wiring. |
 | `dsl-kotlin` | Kotlin DSL and fluent pipeline chaining. |
 | `dsl-hocon` | SeaTunnel-style HOCON parser. |
+| `job-template` | Parameterised job templates (`Config -> FlowDefinition`) and their descriptors. |
 | `cli` | HOCON file runner for users who want to provide only config. |
 | `integration-tests` | Local Spark integration tests. |
 
@@ -62,6 +64,32 @@ not full Apache SeaTunnel runtime compatibility.
 
 Built-in node descriptors and structured validation diagnostics are exposed from
 the library so external graph builders do not need to hardcode node fields.
+
+## Extension SPI
+
+Third-party libraries contribute node types and job templates through
+`java.util.ServiceLoader`, so a contributing library stays a plain JVM library
+with no dependency on the tool that consumes it:
+
+```kotlin
+class MyNodeDescriptorProvider : NodeDescriptorProvider {
+    override val contributor = "my-lib"
+    override fun descriptors() = listOf(/* NodeDescriptor(...) */)
+}
+```
+
+Register it in
+`META-INF/services/org.openprojectx.spark.boot.core.NodeDescriptorProvider`,
+then assemble the palette with `NodeCatalog.discover()`. Built-in nodes use the
+same path — `connectors` registers `BuiltinNodeDescriptorProvider` — so they
+are not special-cased.
+
+`job-template` adds the layer above the graph: a `JobTemplate` is a pure
+`Config -> FlowDefinition` compiler whose `JobDescriptor` describes the
+parameters it accepts, letting tools render forms, lint configs, and preview
+the resulting graph. Templates are discovered with `TemplateCatalog.discover()`.
+
+See [docs/extensions.adoc](docs/extensions.adoc).
 
 ## Quick Start
 
